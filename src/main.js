@@ -1,9 +1,10 @@
-// Milestone 1: buktikan WebXR + VPS jalan di HP, dan mapCodes = lantai.
-// Localize mapset Jemursari, tampilkan poseFound/confidence/mapCodes LIVE di HUD,
-// dan taruh penanda di origin map (bukti worldFromMap bekerja).
+// Milestone 2: buktikan LOOP NAVIGASI jalan di WebXR.
+// "Taruh tujuan → navigasi balik": tombol SET TUJUAN merekam posisi user SEKARANG
+// (world space three.js) sebagai tujuan; tiap frame panah + jarak memandu ke sana.
+// Sengaja pakai drop-pin, BUKAN koordinat POI Unity — supaya loop navigasi teruji
+// terpisah dari soal frame-koordinat Unity→VPS + handedness (README §4, belum beres).
 //
-// Verifikasi §3 README: berjalan-jalan antar lantai → mapCodes berubah?
-// HUD menyimpan daftar mapCodes berbeda yang pernah terlihat.
+// Milestone 1 (tetap): localize mapset Jemursari + mapCodes = lantai (§3).
 
 import * as THREE from "three";
 import { MultisetClient, XRSessionManager } from "@multisetai/vps/core";
@@ -13,15 +14,16 @@ const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
 
 const hud = document.getElementById("hud");
-const state = { auth: "—", session: "—", last: "—", seen: new Set() };
+const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN" };
 function draw() {
   hud.innerHTML =
-    `<b>DARSI WebXR</b> — uji mapCodes (${MAPSET})\n` +
+    `<b>DARSI WebXR</b> — uji navigasi (${MAPSET})\n` +
     `auth    : ${state.auth}\n` +
     `sesi    : ${state.session}\n` +
     `localize: ${state.last}\n` +
-    `mapCodes terlihat: ${[...state.seen].join("  |  ") || "—"}` +
-    (state.seen.size > 1 ? `\n<b>✓ mapCodes BERBEDA antar-lantai — §3 terbukti</b>` : "");
+    `mapCodes : ${[...state.seen].join(" | ") || "—"}` +
+    (state.seen.size > 1 ? `  <b>✓ §3</b>` : "") + `\n` +
+    `<b>navigasi: ${state.nav}</b>`;
 }
 const fail = (m) => { hud.innerHTML = `<span class="err">✗ ${m}</span>`; };
 
@@ -70,8 +72,34 @@ async function main() {
     onError: (e) => { state.last = `error: ${e?.message ?? e}`; draw(); },
   });
 
+  // --- objek navigasi (world space) ---
+  let destination = null;                        // THREE.Vector3 world, atau null
+  const destMarker = new THREE.Mesh(             // pilar kuning di titik tujuan
+    new THREE.CylinderGeometry(0.06, 0.06, 1.6, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
+  destMarker.visible = false;
+  scene.add(destMarker);
+
+  const arrow = new THREE.ArrowHelper(           // panah pemandu, melayang di depan kamera
+    new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 0.4, 0x00ff88, 0.15, 0.09);
+  arrow.visible = false;
+  scene.add(arrow);
+
   new ThreeAdapter({
     session, renderer, scene, camera, showMesh: false,
+    onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
+      if (!destination) return;
+      const user = camera.position;
+      const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
+      const dist = user.distanceTo(flat);
+      // panah 0.8 m di depan kamera, menunjuk tujuan (horizontal)
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      arrow.position.copy(user).addScaledVector(fwd, 0.8);
+      const dir = flat.sub(arrow.position); dir.y = 0;
+      if (dir.lengthSq() > 1e-4) arrow.setDirection(dir.normalize());
+      state.nav = dist < 0.8 ? "✓ SAMPAI di tujuan" : `jarak ${dist.toFixed(1)} m → ikuti panah`;
+      draw();
+    },
     onLocalizationSuccess: (_result, worldFromMap) => {
       // bukti anchoring: bola hijau di ORIGIN map + triad sumbu 1 m
       const at = (v, c) => {
@@ -83,9 +111,25 @@ async function main() {
       at(new THREE.Vector3(0, 0, 0), 0x00ff88);  // origin
       at(new THREE.Vector3(1, 0, 0), 0xff0000);  // +X
       at(new THREE.Vector3(0, 0, 1), 0x0088ff);  // +Z
-      console.log("worldFromMap", worldFromMap.elements);
     },
   }).initialize();                    // pasang tombol START AR
+
+  // tombol SET TUJUAN — rekam posisi user sekarang sbg tujuan (world space)
+  const btn = document.createElement("button");
+  btn.textContent = "SET TUJUAN";
+  btn.style.cssText =
+    "position:fixed;left:16px;bottom:24px;z-index:20;padding:12px 16px;" +
+    "font:600 14px system-ui;color:#000;background:#ffcc00;border:0;border-radius:8px;";
+  btn.onclick = () => {
+    destination = camera.position.clone();
+    destMarker.position.copy(destination);
+    destMarker.position.y = camera.position.y - 0.7;   // pangkal pilar mendekati lantai
+    destMarker.visible = true;
+    arrow.visible = true;
+    state.nav = "tujuan diset — menjauh lalu kembali";
+    draw();
+  };
+  document.body.appendChild(btn);
 
   draw();
 }
