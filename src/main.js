@@ -14,13 +14,14 @@ const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
 
 const hud = document.getElementById("hud");
-const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—" };
+const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—", pos: "—" };
 function draw() {
   hud.innerHTML =
     `<b>DARSI WebXR</b> — uji navigasi (${MAPSET})\n` +
     `auth    : ${state.auth}\n` +
     `sesi    : ${state.session}\n` +
     `localize: ${state.last}\n` +
+    `pos(map): ${state.pos}   <b>← Y = kandidat sinyal lantai</b>\n` +
     `mapCodes : ${[...state.seen].join(" | ") || "—"}` +
     (state.seen.size > 1 ? `  <b>✓ §3</b>` : "") + `\n` +
     `anchor geser/relocalize: ${state.drift}\n` +
@@ -67,6 +68,8 @@ async function main() {
       const codes = (d.mapCodes || []).join(",");
       if (codes) state.seen.add(codes);
       state.last = `poseFound=${d.poseFound}  conf=${d.confidence?.toFixed(3)}  mapCodes=[${codes}]`;
+      const p = d.position;
+      if (p) state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`;
       draw();
     },
     onLocalizationFailure: (why) => { state.last = `gagal: ${why ?? "—"}`; draw(); },
