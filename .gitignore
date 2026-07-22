@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Secrets — JANGAN commit. Pakai .env.example sebagai template.
+.env
+.env.*
+!.env.example
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Misc
+.DS_Store
+*.pem
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# MultiSet navigation data yang di-generate ulang dari Unity (bukan source of truth)
+# — commit HANYA navigation_data.json final; abaikan artefak scan mentah kalau ada.
+*.tgz
+
+.vercel
+.env*

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>DARSI WebXR — uji mapCodes</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #eee;
+      font: 14px/1.5 system-ui, sans-serif; }
+    /* HUD tetap terlihat saat sesi AR lewat WebXR DOM overlay (overlayRoot = body) */
+    #hud { position: fixed; inset: 0 0 auto 0; padding: 12px 14px;
+      background: rgba(0,0,0,.6); white-space: pre-wrap; z-index: 10;
+      pointer-events: none; }
+    #hud b { color: #00ff88; }
+    .warn { color: #ffb020; }
+    .err  { color: #ff5060; }
+  </style>
+</head>
+<body>
+  <div id="hud">DARSI WebXR — memuat…</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
