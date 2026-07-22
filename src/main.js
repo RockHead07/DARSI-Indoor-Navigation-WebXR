@@ -14,7 +14,7 @@ const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
 
 const hud = document.getElementById("hud");
-const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—" };
+const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—", filter: "—" };
 function draw() {
   hud.innerHTML =
     `<b>DARSI WebXR</b> — uji navigasi (${MAPSET})\n` +
@@ -23,7 +23,8 @@ function draw() {
     `localize: ${state.last}\n` +
     `mapCodes : ${[...state.seen].join(" | ") || "—"}` +
     (state.seen.size > 1 ? `  <b>✓ §3</b>` : "") + `\n` +
-    `anchor geser/relocalize: ${state.drift}\n` +
+    `geser mentah: ${state.drift}\n` +
+    `filter anchor: ${state.filter}\n` +
     `<b>navigasi: ${state.nav}</b>`;
 }
 const fail = (m) => { hud.innerHTML = `<span class="err">✗ ${m}</span>`; };
@@ -94,6 +95,11 @@ async function main() {
   };
   const gizmo = { o: mkDot(0x00ff88), x: mkDot(0xff0000), z: mkDot(0x0088ff) };  // origin/+X/+Z
   let lastOriginWorld = null;
+  // filter tolak-outlier untuk anchor MAP: tahan worldFromMap yang diterima,
+  // tolak localize yang melompat > TOL (curiga salah-lokalisasi), pindah region
+  // hanya bila dikonfirmasi 2 localize konsisten (pola konsistensi ADR-020-C).
+  let acceptedWFM = null, acceptedOrigin = null, pending = null;
+  const TOL = 1.5;  // meter
 
   new ThreeAdapter({
     session, renderer, scene, camera, showMesh: false,
@@ -111,16 +117,35 @@ async function main() {
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
-      // UPDATE posisi gizmo (bukan tambah baru) — worldFromMap dihitung ulang tiap localize.
-      const put = (dot, x, y, z) => {
-        dot.position.copy(new THREE.Vector3(x, y, z).applyMatrix4(worldFromMap));
-        dot.visible = true;
-      };
-      put(gizmo.o, 0, 0, 0); put(gizmo.x, 1, 0, 0); put(gizmo.z, 0, 0, 1);
-      // ukur pergeseran origin antar-localize = repeatability VPS + drift tracking
-      const now = gizmo.o.position.clone();
-      if (lastOriginWorld) state.drift = `${now.distanceTo(lastOriginWorld).toFixed(2)} m`;
-      lastOriginWorld = now;
+      const originNow = new THREE.Vector3(0, 0, 0).applyMatrix4(worldFromMap);
+
+      // geser MENTAH (sebelum filter) — untuk tetap melihat repeatability VPS asli
+      if (lastOriginWorld) state.drift = `${originNow.distanceTo(lastOriginWorld).toFixed(2)} m`;
+      lastOriginWorld = originNow.clone();
+
+      // keputusan terima/tolak
+      let accept = false;
+      if (!acceptedWFM) { accept = true; state.filter = "localize pertama diterima"; }
+      else {
+        const jump = originNow.distanceTo(acceptedOrigin);
+        if (jump < TOL) { accept = true; pending = null; state.filter = `stabil (${jump.toFixed(2)} m)`; }
+        else if (pending && originNow.distanceTo(pending) < TOL) {
+          accept = true; pending = null; state.filter = `pindah region dikonfirmasi (${jump.toFixed(1)} m)`;
+        } else {
+          pending = originNow.clone();
+          state.filter = `<span class="warn">DITOLAK: lompat ${jump.toFixed(1)} m — anchor tetap</span>`;
+        }
+      }
+
+      if (accept) {                       // hanya update anchor bila localize diterima
+        acceptedWFM = worldFromMap.clone();
+        acceptedOrigin = originNow.clone();
+        const put = (dot, x, y, z) => {
+          dot.position.copy(new THREE.Vector3(x, y, z).applyMatrix4(acceptedWFM));
+          dot.visible = true;
+        };
+        put(gizmo.o, 0, 0, 0); put(gizmo.x, 1, 0, 0); put(gizmo.z, 0, 0, 1);
+      }
       draw();
     },
   }).initialize();                    // pasang tombol START AR
