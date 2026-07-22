@@ -14,7 +14,7 @@ const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
 
 const hud = document.getElementById("hud");
-const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN" };
+const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—" };
 function draw() {
   hud.innerHTML =
     `<b>DARSI WebXR</b> — uji navigasi (${MAPSET})\n` +
@@ -23,6 +23,7 @@ function draw() {
     `localize: ${state.last}\n` +
     `mapCodes : ${[...state.seen].join(" | ") || "—"}` +
     (state.seen.size > 1 ? `  <b>✓ §3</b>` : "") + `\n` +
+    `anchor geser/relocalize: ${state.drift}\n` +
     `<b>navigasi: ${state.nav}</b>`;
 }
 const fail = (m) => { hud.innerHTML = `<span class="err">✗ ${m}</span>`; };
@@ -85,6 +86,15 @@ async function main() {
   arrow.visible = false;
   scene.add(arrow);
 
+  // gizmo koordinat map — DIBUAT SEKALI, di-update tiap localize (jangan menumpuk).
+  const mkDot = (c) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.08),
+                             new THREE.MeshBasicMaterial({ color: c }));
+    m.visible = false; scene.add(m); return m;
+  };
+  const gizmo = { o: mkDot(0x00ff88), x: mkDot(0xff0000), z: mkDot(0x0088ff) };  // origin/+X/+Z
+  let lastOriginWorld = null;
+
   new ThreeAdapter({
     session, renderer, scene, camera, showMesh: false,
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
@@ -101,16 +111,17 @@ async function main() {
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
-      // bukti anchoring: bola hijau di ORIGIN map + triad sumbu 1 m
-      const at = (v, c) => {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(0.08),
-                                 new THREE.MeshBasicMaterial({ color: c }));
-        m.position.copy(v.applyMatrix4(worldFromMap));
-        scene.add(m);
+      // UPDATE posisi gizmo (bukan tambah baru) — worldFromMap dihitung ulang tiap localize.
+      const put = (dot, x, y, z) => {
+        dot.position.copy(new THREE.Vector3(x, y, z).applyMatrix4(worldFromMap));
+        dot.visible = true;
       };
-      at(new THREE.Vector3(0, 0, 0), 0x00ff88);  // origin
-      at(new THREE.Vector3(1, 0, 0), 0xff0000);  // +X
-      at(new THREE.Vector3(0, 0, 1), 0x0088ff);  // +Z
+      put(gizmo.o, 0, 0, 0); put(gizmo.x, 1, 0, 0); put(gizmo.z, 0, 0, 1);
+      // ukur pergeseran origin antar-localize = repeatability VPS + drift tracking
+      const now = gizmo.o.position.clone();
+      if (lastOriginWorld) state.drift = `${now.distanceTo(lastOriginWorld).toFixed(2)} m`;
+      lastOriginWorld = now;
+      draw();
     },
   }).initialize();                    // pasang tombol START AR
 
