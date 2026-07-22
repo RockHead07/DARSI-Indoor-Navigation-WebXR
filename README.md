@@ -98,14 +98,21 @@ Lantai 2:  mapCodes = [MAP_BCADVLIXFSJE, MAP_MW1QTZWG1TLG]   ← 2 kode, BCAD di
    `hintMapCodes` yang ditulis di `main.js`** (`['MAP_BCADVLIXFSJE','MAP_MW1QTZWG1TLG']`).
    Jadi `mapCodes[0]` = artefak urutan hint, **bukan** sinyal lantai. Jangan andalkan.
 
-**Sinyal lantai yang benar (dari data lapangan):**
-- **Kehadiran**, bukan urutan: `BCAD` muncul HANYA di lantai 2; lantai 1 = `[MW]` saja.
-  VPS mengembalikan subset hint yang cocok. Cukup untuk 2 lantai, ribet untuk >2.
-- **Lebih kokoh (perlu verifikasi):** `position` hasil localize dalam frame **mapset**
-  (semua map di-align via `relativePose`) — Y-nya mengkodekan tinggi/lantai langsung,
-  stabil (tidak seperti Y-kamera). Ini kandidat sinyal lantai utama, bukan `mapCodes`.
-- Respons hanya punya SATU `confidence` (0.648–0.693), tak ada confidence per-map → tak
-  bisa me-ranking map dari respons.
+**Sinyal lantai yang benar = `position.Y` (TERBUKTI lapangan 2026-07-22):**
+```
+Lantai 1: pos(map) x=-1.9 y=-0.5 z=34.3   (mapCode BCAD, conf 0.78)
+Lantai 2: pos(map) x=-2.0 y= 3.7 z=38.0   (mapCode MW,   conf 0.61)
+          ΔY = 4.2 m = tinggi satu lantai; X nyaris sama
+```
+→ `position` ada di **frame mapset terpadu**; `Y` = tinggi absolut = **sinyal lantai kokoh.**
+Pakai threshold sederhana (`Y < ~2 → lt1`, `≥ 2 → lt2`), BUKAN `mapCodes[0]` (artefak hint).
+
+**Lebih baik dari Unity:** `FloorVisibilityManager` klaster **Y-kamera** (berisik, drift,
+butuh smoothing/hysteresis/018-A). `pos.Y` VPS **absolut** dari localize → threshold langsung.
+Caveat: hanya sebaik localize-nya — saat localize gagal berat (§3.5), Y ikut salah.
+
+- `mapCodes` juga korelasi lantai di tes ini (BCAD=lt1, MW=lt2) tapi urutannya artefak; `Y` lebih andal.
+- Respons hanya SATU `confidence`, tak ada confidence per-map → tak bisa ranking map dari respons.
 
 **Eksperimen belum dijalankan (lain waktu):** balik `hintMapCodes` → `[MW, BCAD]`, redeploy,
 localize lantai 2. Bila hasil ikut balik → urutan = urutan hint (artefak) terkonfirmasi.
@@ -245,7 +252,7 @@ Pelajaran lapangan: WiFi RS menelan koneksi diam-diam → uji dgn seluler; `poiC
 - [x] **⛔ BLOCKER ditemukan: localize map Jemursari lompat 5–60 m** (§3.5) — memblokir POI/navigasi
 - [ ] **Cek Localization Heatmap Jemursari** (dashboard MultiSet) — bukti scan jelek?
 - [ ] **Ukur `geser` map A. Yani** (target sebenarnya; butuh di lokasi)
-- [ ] **Cara baca lantai dari respons belum final** — `mapCodes[0]` artefak hint; uji `position.y`
+- [x] **Sinyal lantai FINAL = `position.Y`** — lt1 Y=−0.5, lt2 Y=3.7 (Δ4.2m); frame mapset, threshold sederhana (ganti mapCodes[0])
 - [ ] Desain alur balik Chrome→Flutter
 - [ ] Konfirmasi lingkup larangan Unity ke dosen
 - [ ] Setup POI (tandai-di-web) — HANYA setelah blocker localize beres
