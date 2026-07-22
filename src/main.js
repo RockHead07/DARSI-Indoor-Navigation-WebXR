@@ -98,17 +98,17 @@ async function main() {
   const gizmo = { o: mkDot(0x00ff88), x: mkDot(0xff0000), z: mkDot(0x0088ff) };  // origin/+X/+Z
   let lastOriginWorld = null;
 
-  new ThreeAdapter({
+  const adapter = new ThreeAdapter({
     session, renderer, scene, camera, showMesh: false,
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
-      const user = camera.position;
+      // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
+      const user = new THREE.Vector3(); camera.getWorldPosition(user);
       const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
       const dist = user.distanceTo(flat);
-      // panah 0.8 m di depan kamera, menunjuk tujuan (horizontal)
-      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);   // arah pandang (-Z world)
       arrow.position.copy(user).addScaledVector(fwd, 0.8);
-      const dir = flat.sub(arrow.position); dir.y = 0;
+      const dir = flat.clone().sub(arrow.position); dir.y = 0;
       if (dir.lengthSq() > 1e-4) arrow.setDirection(dir.normalize());
       state.nav = dist < 0.8 ? "✓ SAMPAI di tujuan" : `jarak ${dist.toFixed(1)} m → ikuti panah`;
       draw();
@@ -126,24 +126,34 @@ async function main() {
       lastOriginWorld = now;
       draw();
     },
-  }).initialize();                    // pasang tombol START AR
+  });
+  adapter.initialize();               // pasang tombol START AR
 
-  // tombol SET TUJUAN — rekam posisi user sekarang sbg tujuan (world space)
-  const btn = document.createElement("button");
-  btn.textContent = "SET TUJUAN";
-  btn.style.cssText =
-    "position:fixed;left:16px;bottom:24px;z-index:20;padding:12px 16px;" +
-    "font:600 14px system-ui;color:#000;background:#ffcc00;border:0;border-radius:8px;";
-  btn.onclick = () => {
-    destination = camera.position.clone();
-    destMarker.position.copy(destination);
-    destMarker.position.y = camera.position.y - 0.7;   // pangkal pilar mendekati lantai
-    destMarker.visible = true;
-    arrow.visible = true;
+  const mkBtn = (text, bg, fg, bottom, fn) => {
+    const b = document.createElement("button");
+    b.textContent = text;
+    b.style.cssText = `position:fixed;left:16px;bottom:${bottom}px;z-index:20;` +
+      `padding:11px 16px;font:600 14px system-ui;color:${fg};background:${bg};border:0;border-radius:8px;`;
+    b.onclick = fn;
+    document.body.appendChild(b);
+  };
+
+  // SET TUJUAN — rekam posisi user SEKARANG (world) sbg tujuan
+  mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
+    const wp = new THREE.Vector3(); camera.getWorldPosition(wp);   // world, bukan camera.position
+    destination = wp.clone();
+    destMarker.position.copy(wp);
+    destMarker.position.y = wp.y - 0.7;                            // pangkal pilar mendekati lantai
+    destMarker.visible = true; arrow.visible = true;
     state.nav = "tujuan diset — menjauh lalu kembali";
     draw();
-  };
-  document.body.appendChild(btn);
+  });
+
+  // RELOCALIZE — picu localize manual (perbaiki pose bila tracking meleset)
+  mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
+    state.last = "relocalize…"; draw();
+    adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
+  });
 
   draw();
 }
