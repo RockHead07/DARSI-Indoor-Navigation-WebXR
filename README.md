@@ -115,6 +115,40 @@ dari respons **belum final** — condong ke `position.y` frame-mapset, bukan `ma
 
 ---
 
+## 3.5 ⛔ BLOCKER UTAMA — localize map Jemursari TIDAK STABIL (lapangan 2026-07-22)
+
+Diukur di HUD (`anchor geser/relocalize` = pergeseran origin-map di world antar-localize):
+
+| conf | mapCodes | geser antar-localize |
+|---|---|---|
+| 0.817 | 1 map | **25.5 m** |
+| 0.780 | 1 map | **5.2 m** |
+| 0.543 | 2 map (ambigu) | **59.8 m** |
+
+**Ini salah-lokalisasi berat, bukan variansi kecil.** VPS mengunci ke lokasi mirip-tapi-salah
+(koridor RS berulang & mirip antar-lantai). Confidence pun tak bisa jadi filter: `conf 0.82`
+tetap meleset 25 m.
+
+**Konsekuensi keras:**
+- Navigasi **world-anchored** (drop-pin) JALAN — pilar tujuan stabil, "sampai" terdeteksi.
+- Navigasi **map-anchored** (gizmo, POI asli) RUSAK — titik lompat 5–60 m.
+- Karena POI asli wajib map-anchored, **navigasi POI diblokir sampai localize stabil.**
+
+**Ini masalah MAP, bukan WebXR.** VPS & map sama → app Unity dgn map ini sama kacaunya.
+
+**Band-aid ditolak (best practice):** filter tolak-outlier di client sempat dibuat lalu
+**dibuang** — ia menyembunyikan gejala, dan bisa mengunci fix pertama yang salah lalu menolak
+yang benar. Map jelek tak bisa diselamatkan dari client (sejalan ADR-021: obati penyebab).
+
+**Jalan keluar (urut):**
+1. **Cek Localization Heatmap** map Jemursari di dashboard MultiSet → bukti scan jelek.
+2. **Ukur `geser` di map A. Yani** (target sebenarnya; butuh di lokasi). Jemursari cuma
+   scan latihan — instabilitasnya mungkin tak relevan.
+3. Kalau perlu, **scan ulang** lebih rapat & kaya fitur.
+4. **Baru** bangun setup POI + navigasi di atas map yang localize stabil.
+
+---
+
 ## 4. Menempatkan POI — `worldFromMap` (terverifikasi tipe)
 
 `ThreeAdapter.onLocalizationSuccess(result, worldFromMap: THREE.Matrix4)` mentransform
@@ -185,11 +219,16 @@ Pelajaran lapangan: WiFi RS menelan koneksi diam-diam → uji dgn seluler; `poiC
 
 ## 8. Gerbang keputusan berikutnya
 
-1. **`mapCodes` beda lantai** — ⏳ tinggal uji lantai kedua (§3).
-2. **Larangan Unity** — produk saja atau di mana pun? Tanya dosen (1 kalimat).
-3. **Alur balik Chrome → Flutter** — `arSessionClosed` sekarang panggilan langsung ke
+0. **⛔ BLOCKER: localize stabil** (§3.5) — map Jemursari lompat 5–60 m. **Semua di bawah
+   ini (POI, navigasi) diblokir sampai ada map yang localize < ~1 m.** Cek heatmap +
+   uji A. Yani dulu.
+1. **Larangan Unity** — produk saja atau di mana pun? Tanya dosen (1 kalimat).
+2. **Alur balik Chrome → Flutter** — `arSessionClosed` sekarang panggilan langsung ke
    WebView hidup; Custom Tab tak punya itu. Kandidat deep link
    `myrsiy://ar-done?arrived=true&poiId=…`. Belum dibuktikan.
+3. **Setup POI** (setelah blocker #0 beres) — cara terbersih = **tandai di web**: berdiri
+   di POI, localize, rekam `position` map-space, simpan. Menghindari transfer koordinat
+   Unity + handedness. Impor `navigation_data.json` = alternatif tapi butuh solve frame.
 
 ---
 
@@ -202,10 +241,14 @@ Pelajaran lapangan: WiFi RS menelan koneksi diam-diam → uji dgn seluler; `poiC
       anchoring OK** (TECNO KL7, 2026-07-22)
 - [x] iOS unsupported — terkonfirmasi di iPhone
 - [x] **Diskriminasi lantai TERBUKTI** — `BCAD` hanya muncul di lantai 2 (kedua lantai teruji)
-- [ ] **Cara baca lantai dari respons belum final** — `mapCodes[0]` ternyata artefak urutan
-      hint; condong ke `position.y` frame-mapset. Uji flip-hint + pose (lihat §3)
+- [x] **Loop navigasi world-anchored JALAN** — drop-pin + panah + jarak + "sampai" (device)
+- [x] **⛔ BLOCKER ditemukan: localize map Jemursari lompat 5–60 m** (§3.5) — memblokir POI/navigasi
+- [ ] **Cek Localization Heatmap Jemursari** (dashboard MultiSet) — bukti scan jelek?
+- [ ] **Ukur `geser` map A. Yani** (target sebenarnya; butuh di lokasi)
+- [ ] **Cara baca lantai dari respons belum final** — `mapCodes[0]` artefak hint; uji `position.y`
 - [ ] Desain alur balik Chrome→Flutter
 - [ ] Konfirmasi lingkup larangan Unity ke dosen
+- [ ] Setup POI (tandai-di-web) — HANYA setelah blocker localize beres
 - [ ] Pindah kode inti → route `/ar` di app Next.js WebView
 
 ---
