@@ -143,6 +143,14 @@ tetap meleset 25 m.
 
 **Ini masalah MAP, bukan WebXR.** VPS & map sama → app Unity dgn map ini sama kacaunya.
 
+**Dikonfirmasi server (dashboard MultiSet → Analytics → Maps Query):**
+- Success rate **65%** (54 Found / 83; 29 Not Found) — terlalu rendah untuk navigasi andal.
+- Nama map: `Azzara3`=MW=lt2, `Azzara2`=BCAD=lt1.
+- **Lantai 1 (Azzara2/BCAD) paling lemah:** sering "Not Found". Saat BCAD gagal, VPS
+  nyangkut ke MW (lt2) yang mirip → sumber lompatan anchor. **Scan lt1 harus diperbaiki.**
+- Confidence 74–79% pun tetap meleset → "yakin match" ≠ "match benar"; confidence bukan filter.
+- Dashboard ini = **alat verifikasi scan**: setelah re-scan, success rate harus naik jauh.
+
 **Band-aid ditolak (best practice):** filter tolak-outlier di client sempat dibuat lalu
 **dibuang** — ia menyembunyikan gejala, dan bisa mengunci fix pertama yang salah lalu menolak
 yang benar. Map jelek tak bisa diselamatkan dari client (sejalan ADR-021: obati penyebab).
