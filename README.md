@@ -151,6 +151,17 @@ tetap meleset 25 m.
 - Confidence 74–79% pun tetap meleset → "yakin match" ≠ "match benar"; confidence bukan filter.
 - Dashboard ini = **alat verifikasi scan**: setelah re-scan, success rate harus naik jauh.
 
+**Failure mode paling berbahaya — CONFIDENT-WRONG-FLOOR (mesh lapangan 2026-07-23):**
+Fisik di lantai 1, tapi HUD `mapCodes=[MW]` + `pos.y=3.9` (= lantai 2) → **VPS localize ke
+map lantai yang SALAH.** `showMesh` mengonfirmasi visual: mesh lantai 2 melayang, tak pas
+koridor lantai 1. Bahayanya: `geser 0.11–0.40 m` (stabil) + `conf 0.73–0.75` (lumayan) —
+semua indikator bilang "bagus", padahal salah lantai. **Stabil + confident ≠ benar.**
+Sebab: lantai 1 & 2 nyaris identik + scan BCAD lemah → VPS pilih MW yang mirip.
+
+**Solusi (memvalidasi ADR-020):** di gedung simetris, VPS sendiri tak bisa tentukan lantai.
+Batasi `hintMapCodes` ke lantai yang diketahui (dari state machine tangga) → "lantai benar
+atau Not Found", bukan "salah lantai dgn PD". Plus scan yang menangkap fitur pembeda lantai.
+
 **Band-aid ditolak (best practice):** filter tolak-outlier di client sempat dibuat lalu
 **dibuang** — ia menyembunyikan gejala, dan bisa mengunci fix pertama yang salah lalu menolak
 yang benar. Map jelek tak bisa diselamatkan dari client (sejalan ADR-021: obati penyebab).
