@@ -151,16 +151,20 @@ tetap meleset 25 m.
 - Confidence 74–79% pun tetap meleset → "yakin match" ≠ "match benar"; confidence bukan filter.
 - Dashboard ini = **alat verifikasi scan**: setelah re-scan, success rate harus naik jauh.
 
-**Failure mode paling berbahaya — CONFIDENT-WRONG-FLOOR (mesh lapangan 2026-07-23):**
-Fisik di lantai 1, tapi HUD `mapCodes=[MW]` + `pos.y=3.9` (= lantai 2) → **VPS localize ke
-map lantai yang SALAH.** `showMesh` mengonfirmasi visual: mesh lantai 2 melayang, tak pas
-koridor lantai 1. Bahayanya: `geser 0.11–0.40 m` (stabil) + `conf 0.73–0.75` (lumayan) —
-semua indikator bilang "bagus", padahal salah lantai. **Stabil + confident ≠ benar.**
-Sebab: lantai 1 & 2 nyaris identik + scan BCAD lemah → VPS pilih MW yang mirip.
+**REPEATABLE ≠ ACCURATE (mesh lapangan 2026-07-23, dgn koreksi):**
+Di lantai 2 yang ter-localize BENAR (mapCodes=[MW], pos.y=3.9 ✓ cocok temuan Y) dan STABIL
+(`geser 0.1–0.4 m`, `conf 0.73–0.75`), `showMesh` menunjukkan mesh **tetap melayang/tak pas**
+koridor nyata. Pelajaran: **`geser` = REPEATABILITY (konsisten antar-localize), BUKAN
+AKURASI (vs dunia nyata).** Pose bisa konsisten tapi meleset dari posisi asli. Jadi:
+- `geser` kecil + `conf` tinggi **tidak** menjamin pose akurat.
+- **Mesh overlay = satu-satunya cek AKURASI** yang kita punya; angka geser/conf tidak bisa.
+- (Alternatif: mesh scan sparse/parsial → tampak melayang. Sulit dipastikan dari foto;
+  kedua kemungkinan → akar sama: kualitas scan.)
 
-**Solusi (memvalidasi ADR-020):** di gedung simetris, VPS sendiri tak bisa tentukan lantai.
-Batasi `hintMapCodes` ke lantai yang diketahui (dari state machine tangga) → "lantai benar
-atau Not Found", bukan "salah lantai dgn PD". Plus scan yang menangkap fitur pembeda lantai.
+**Catatan koreksi:** sempat salah kira ini "confident-wrong-floor" (mengira lantai 1). Salah —
+itu lantai 2, localize benar. Floor detection via Y tetap valid. Risiko salah-lantai di gedung
+simetris **tetap mungkin** (dashboard: BCAD lemah) → mitigasi `hintMapCodes` per-lantai (dari
+state machine tangga, ADR-020) tetap relevan sebagai pengaman, walau bukan penyebab kasus ini.
 
 **Band-aid ditolak (best practice):** filter tolak-outlier di client sempat dibuat lalu
 **dibuang** — ia menyembunyikan gejala, dan bisa mengunci fix pertama yang salah lalu menolak
