@@ -262,6 +262,29 @@ Pelajaran lapangan: WiFi RS menelan koneksi diam-diam → uji dgn seluler; `poiC
 
 ---
 
+## 9. Pekerjaan yang BISA jalan tanpa ke lokasi
+
+Blocker §3.5 memblokir POI/navigasi map-anchored — tapi TIDAK memblokir semuanya.
+Urutan berdasarkan leverage:
+
+1. **Protokol scan** — bedah panduan scanning resmi MultiSet → checklist konkret
+   (pola gerak, kecepatan, cakupan, loop closure, pencahayaan). Dipakai saat
+   re-scan Jemursari & scan A. Yani. Video scan sendiri = pembanding, bukan prasyarat.
+2. **Alur balik Chrome → Flutter** (§8 #2) — prototipe deep link
+   `myrsiy://ar-done?arrived=…`: handler di CopyCat + tombol "selesai" di halaman AR.
+   Sama sekali tak tergantung kualitas map; unknown integrasi terakhir.
+3. **Mesin A\*** (§6) — logika murni di atas `waypoints[].connectedWaypoints`
+   (`navigation_data.json` ekspor Unity), bisa ditulis + diuji unit tanpa perangkat.
+   Begitu ada map akurat, navigasi POI tinggal pasang.
+4. **Proxy token backend** (§5 ⚠️) — `authorize()` lewat FastAPI, secret keluar
+   dari bundle. Syarat produksi, kode murni.
+5. Non-teknis: rotasi kredensial ter-expose; tanya dosen (§8 #1).
+
+Prinsip: saat map bagus tersedia, semuanya sudah menunggu — protokol scan ✓,
+alur balik ✓, mesin A* ✓ — tinggal colok.
+
+---
+
 ## Status
 
 - [x] Riset SDK — API terverifikasi dari `.d.ts` v2.3.1
@@ -276,7 +299,11 @@ Pelajaran lapangan: WiFi RS menelan koneksi diam-diam → uji dgn seluler; `poiC
 - [ ] **Cek Localization Heatmap Jemursari** (dashboard MultiSet) — bukti scan jelek?
 - [ ] **Ukur `geser` map A. Yani** (target sebenarnya; butuh di lokasi)
 - [x] **Sinyal lantai FINAL = `position.Y`** — lt1 Y=−0.5, lt2 Y=3.7 (Δ4.2m); frame mapset, threshold sederhana (ganti mapCodes[0])
-- [ ] Desain alur balik Chrome→Flutter
+- [ ] Protokol scan dari panduan resmi MultiSet (§9 #1 — tanpa lokasi)
+- [ ] Prototipe alur balik Chrome→Flutter, deep link (§9 #2 — tanpa lokasi)
+- [ ] Mesin A* + uji unit di atas `navigation_data.json` (§9 #3 — tanpa lokasi)
+- [ ] Proxy token backend FastAPI (§9 #4 — tanpa lokasi)
+- [ ] Rotasi kredensial ter-expose
 - [ ] Konfirmasi lingkup larangan Unity ke dosen
 - [ ] Setup POI (tandai-di-web) — HANYA setelah blocker localize beres
 - [ ] Pindah kode inti → route `/ar` di app Next.js WebView
