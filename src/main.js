@@ -99,7 +99,9 @@ async function main() {
   let lastOriginWorld = null;
 
   const adapter = new ThreeAdapter({
-    session, renderer, scene, camera, showMesh: false,
+    session, renderer, scene, camera,
+    showMesh: true,   // DIAGNOSTIK: lihat apakah mesh map pas dgn dinding nyata (mesh
+                      // melayang jauh = mislokalisasi, terlihat mata). Produk → false.
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
       // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
