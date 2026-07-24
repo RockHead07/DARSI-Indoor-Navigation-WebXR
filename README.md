@@ -265,23 +265,24 @@ Pelajaran lapangan: WiFi RS menelan koneksi diam-diam → uji dgn seluler; `poiC
 ## 9. Pekerjaan yang BISA jalan tanpa ke lokasi
 
 Blocker §3.5 memblokir POI/navigasi map-anchored — tapi TIDAK memblokir semuanya.
-Urutan berdasarkan leverage:
+Urutan **divalidasi riset** (bukan "termurah duluan"): risiko pembunuh-tesis =
+**apakah scan lebih baik bikin localize stabil**, dan itu di-de-risk **di Jemursari**
+(bisa diiterasi), bukan A. Yani (akses langka → penerapan sekali-pakai). Karena top-risk
+tak bisa disentuh dari meja, kerja meja diurut **value-per-effort menuju tes lapangan**:
 
-1. **Protokol scan** — bedah panduan scanning resmi MultiSet → checklist konkret
-   (pola gerak, kecepatan, cakupan, loop closure, pencahayaan). Dipakai saat
-   re-scan Jemursari & scan A. Yani. Video scan sendiri = pembanding, bukan prasyarat.
-2. **Alur balik Chrome → Flutter** (§8 #2) — prototipe deep link
-   `myrsiy://ar-done?arrived=…`: handler di CopyCat + tombol "selesai" di halaman AR.
-   Sama sekali tak tergantung kualitas map; unknown integrasi terakhir.
-3. **Mesin A\*** (§6) — logika murni di atas `waypoints[].connectedWaypoints`
-   (`navigation_data.json` ekspor Unity), bisa ditulis + diuji unit tanpa perangkat.
-   Begitu ada map akurat, navigasi POI tinggal pasang.
-4. **Proxy token backend** (§5 ⚠️) — `authorize()` lewat FastAPI, secret keluar
-   dari bundle. Syarat produksi, kode murni.
-5. Non-teknis: rotasi kredensial ter-expose; tanya dosen (§8 #1).
-
-Prinsip: saat map bagus tersedia, semuanya sudah menunggu — protokol scan ✓,
-alur balik ✓, mesin A* ✓ — tinggal colok.
+1. **Protokol scan** — [`docs/SCAN-PROTOCOL.md`](docs/SCAN-PROTOCOL.md). Disarikan dari
+   panduan resmi MultiSet (koridor 2-arah, 1–5 m, overlap 15–20%, feature richness).
+   Prasyarat re-scan Jemursari. **Prioritas #1.**
+2. **Cek dashboard Jemursari** — [`docs/DASHBOARD-CHECK-JEMURSARI.md`](docs/DASHBOARD-CHECK-JEMURSARI.md).
+   Heatmap + success-rate (traffic sudah ada) → pinpoint area lemah lt1/BCAD → re-scan bertarget.
+3. **Re-scan Jemursari** dgn protokol → uji ulang stabilitas localize (loop de-risking inti).
+4. **Alur balik Chrome → Flutter** (§8 #2) — **RUTIN, bukan unknown.** Pola OAuth-via-Custom-Tab:
+   `flutter_custom_tabs` + `app_links`, return **`intent://` dipicu tap user** (bukan
+   auto-redirect sesudah `sessionend` — Chrome buang non-gesture). Spike-sized; tak urgen.
+5. **Mesin A\*** (§6) — **ditunda**: exporter `navigation_data.json` belum ada & handedness
+   Unity→three.js (§4) belum dipecahkan. Membangun sekarang = di atas skema yang belum ada.
+6. **Proxy token backend** (§5 ⚠️) — hardening produksi, di luar jalur pembuktian tesis.
+7. Non-teknis: rotasi kredensial ter-expose; tanya dosen (§8 #1).
 
 ---
 
@@ -299,10 +300,12 @@ alur balik ✓, mesin A* ✓ — tinggal colok.
 - [ ] **Cek Localization Heatmap Jemursari** (dashboard MultiSet) — bukti scan jelek?
 - [ ] **Ukur `geser` map A. Yani** (target sebenarnya; butuh di lokasi)
 - [x] **Sinyal lantai FINAL = `position.Y`** — lt1 Y=−0.5, lt2 Y=3.7 (Δ4.2m); frame mapset, threshold sederhana (ganti mapCodes[0])
-- [ ] Protokol scan dari panduan resmi MultiSet (§9 #1 — tanpa lokasi)
-- [ ] Prototipe alur balik Chrome→Flutter, deep link (§9 #2 — tanpa lokasi)
-- [ ] Mesin A* + uji unit di atas `navigation_data.json` (§9 #3 — tanpa lokasi)
-- [ ] Proxy token backend FastAPI (§9 #4 — tanpa lokasi)
+- [x] **Protokol scan** — `docs/SCAN-PROTOCOL.md` (§9 #1, dari panduan resmi MultiSet)
+- [ ] **Cek dashboard Jemursari** — `docs/DASHBOARD-CHECK-JEMURSARI.md` (§9 #2, pemilik)
+- [ ] Re-scan Jemursari dgn protokol → uji ulang stabilitas localize (§9 #3)
+- [ ] Alur balik Chrome→Flutter — wiring rutin `intent://`+gesture (§9 #4, ditunda)
+- [ ] Mesin A* — ditunda sampai exporter+solve-frame ada (§9 #5)
+- [ ] Proxy token backend FastAPI (§9 #6)
 - [ ] Rotasi kredensial ter-expose
 - [ ] Konfirmasi lingkup larangan Unity ke dosen
 - [ ] Setup POI (tandai-di-web) — HANYA setelah blocker localize beres
