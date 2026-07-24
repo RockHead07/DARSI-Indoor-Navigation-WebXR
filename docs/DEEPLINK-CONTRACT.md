@@ -28,25 +28,29 @@ intent://ar-done?arrived=true#Intent;scheme=myrsiy;package=com.rsislam.surabaya.
    gesture — jadi JANGAN auto-redirect sesudah `sessionend`/`setTimeout`. Tombol = benar.
 2. **Pakai `intent://`**, bukan `window.location = "myrsiy://…"` (sering di-drop di Chrome).
 
-## Setengah-Flutter — BELUM (repo CopyCat `My-eRSIy-CopyCat-`)
+## Setengah-Flutter — RECEIVER SUDAH (repo CopyCat `My-eRSIy-CopyCat-`)
 
-Saat dikerjakan (spike-sized):
-1. `pubspec.yaml`: tambah **`app_links`** (penerima) + **`flutter_custom_tabs`** (peluncur AR).
-2. `android/app/src/main/AndroidManifest.xml`: intent-filter di `MainActivity`:
-   ```xml
-   <intent-filter android:autoVerify="false">
-     <action android:name="android.intent.action.VIEW"/>
-     <category android:name="android.intent.category.DEFAULT"/>
-     <category android:name="android.intent.category.BROWSABLE"/>
-     <data android:scheme="myrsiy" android:host="ar-done"/>
-   </intent-filter>
-   ```
-3. Dart: `AppLinks().uriLinkStream.listen(...)` → parse `arrived` → resume UI 2D
-   (mis. panggil `window.onARSessionClosed(payload)` di WebView, sejajar jalur UaaL lama
-   `ArSessionResume.tsx` / `lib/bridge.ts`).
-4. Peluncuran AR: ganti `MethodChannel('darsi/unity').launchAr` → buka Custom Tab ke
-   `https://darsi-webxr…/ar?poiId=…` via `flutter_custom_tabs`.
+Penerima deep-link terpasang, **additif** — tak menyentuh launch Unity yang sudah jalan:
+1. `pubspec.yaml`: **`app_links: ^6.3.0`**.
+2. `android/app/src/main/AndroidManifest.xml`: intent-filter `VIEW` (`myrsiy`/`ar-done`)
+   di `MainActivity` (singleTop → datang via `onNewIntent` saat app hidup di balik tab).
+3. `lib/features/darsi/darsi_navigation_screen.dart`: `_appLinks.uriLinkStream.listen(_onDeepLink)`
+   → `_onDeepLink` panggil **`window.onARSessionClosed(payload)`** yang SAMA dgn jalur Unity
+   (`ArSessionResume.tsx` / `lib/bridge.ts` di Next.js). Warm-stream cukup (Custom Tab di atas
+   layar hidup; tak ada cold-start). Verifikasi: `flutter analyze` bersih.
 
-> Verifikasi end-to-end baru bisa setelah setengah-Flutter ada (skema diterima app).
-> Sampai itu, setengah-WebXR bisa dicek terpisah: tombol SELESAI mengeset `window.location`
-> ke URL `intent://` yang benar (lihat contoh di atas).
+### BELUM: peluncuran AR via Custom Tab
+Launch masih ke Unity (`MethodChannel('darsi/unity').launchAr`). Menggantinya dgn
+`flutter_custom_tabs` ke `https://darsi-webxr…/ar?poiId=…` **ditunda sengaja** — Unity masih
+runtime AR produk (keputusan "WebXR ganti Unity" belum final: blocker §3.5 + tanya dosen).
+Merobek launch Unity sekarang = merusak flow yang sudah teruji lapangan. Additif dulu.
+
+## Uji terpisah (tanpa perlu launch Custom Tab)
+
+Receiver bisa diuji sendiri via adb — buktikan resume terpanggil tanpa halaman WebXR:
+```bash
+adb shell am start -a android.intent.action.VIEW \
+  -d "myrsiy://ar-done?arrived=true" com.rsislam.surabaya.rs_islam_app
+```
+Buka layar DARSI dulu (WebView aktif) → jalankan perintah → `window.onARSessionClosed({"arrived":"true"})`
+terpanggil di WebView. End-to-end penuh (tap SELESAI di tab → balik) butuh launch Custom Tab (di atas).
