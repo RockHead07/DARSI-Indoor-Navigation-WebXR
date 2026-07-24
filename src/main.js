@@ -54,11 +54,8 @@ async function main() {
   const client = new MultisetClient({
     clientId: ID, clientSecret: SECRET,
     mapType: "map-set", code: MAPSET, hintMapCodes: FLOORS,
-    // TAHAP A (eksperimen): handedness ditangani server-side via flag ini (default true).
-    // Toggle ke false untuk cek apakah "mesh miring" = mismatch handedness. Kalau mesh
-    // malah mirror/tambah kacau → true memang benar (map iOS + WebXR sama-sama right-handed),
-    // dan tilt bukan dari sini → lanjut Tahap B. Balikkan ke true kalau tak membantu.
-    isRightHanded: false,
+    // isRightHanded default true = BENAR (Tahap A terbukti: false memirror sumbu X → lt1
+    // ambruk, lt2 geser 12m). Jadi tilt lt2 BUKAN handedness. Jangan diutak-atik lagi.
   });
   try { await client.authorize(); state.auth = "OK"; }
   catch (e) { return fail(`authorize gagal: ${e.message} (cek CORS domain di dashboard MultiSet)`); }
