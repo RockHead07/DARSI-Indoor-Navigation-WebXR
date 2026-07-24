@@ -276,9 +276,9 @@ tak bisa disentuh dari meja, kerja meja diurut **value-per-effort menuju tes lap
 2. **Cek dashboard Jemursari** — [`docs/DASHBOARD-CHECK-JEMURSARI.md`](docs/DASHBOARD-CHECK-JEMURSARI.md).
    Heatmap + success-rate (traffic sudah ada) → pinpoint area lemah lt1/BCAD → re-scan bertarget.
 3. **Re-scan Jemursari** dgn protokol → uji ulang stabilitas localize (loop de-risking inti).
-4. **Alur balik Chrome → Flutter** (§8 #2) — **RUTIN, bukan unknown.** Pola OAuth-via-Custom-Tab:
-   `flutter_custom_tabs` + `app_links`, return **`intent://` dipicu tap user** (bukan
-   auto-redirect sesudah `sessionend` — Chrome buang non-gesture). Spike-sized; tak urgen.
+4. **Alur balik Chrome → Flutter** (§8 #2) — **RUTIN, bukan unknown.** Kontrak +
+   setengah-WebXR SUDAH: [`docs/DEEPLINK-CONTRACT.md`](docs/DEEPLINK-CONTRACT.md) (tombol
+   SELESAI → `intent://` on-tap). Setengah-Flutter (`app_links` + intent-filter) menyusul.
 5. **Mesin A\*** (§6) — **ditunda**: exporter `navigation_data.json` belum ada & handedness
    Unity→three.js (§4) belum dipecahkan. Membangun sekarang = di atas skema yang belum ada.
 6. **Proxy token backend** (§5 ⚠️) — hardening produksi, di luar jalur pembuktian tesis.
@@ -303,7 +303,7 @@ tak bisa disentuh dari meja, kerja meja diurut **value-per-effort menuju tes lap
 - [x] **Protokol scan** — `docs/SCAN-PROTOCOL.md` (§9 #1, dari panduan resmi MultiSet)
 - [ ] **Cek dashboard Jemursari** — `docs/DASHBOARD-CHECK-JEMURSARI.md` (§9 #2, pemilik)
 - [ ] Re-scan Jemursari dgn protokol → uji ulang stabilitas localize (§9 #3)
-- [ ] Alur balik Chrome→Flutter — wiring rutin `intent://`+gesture (§9 #4, ditunda)
+- [~] Alur balik Chrome→Flutter — setengah-WebXR SUDAH (tombol SELESAI + `intent://`); setengah-Flutter menyusul (§9 #4)
 - [ ] Mesin A* — ditunda sampai exporter+solve-frame ada (§9 #5)
 - [ ] Proxy token backend FastAPI (§9 #6)
 - [ ] Rotasi kredensial ter-expose

@@ -13,6 +13,18 @@ import { ThreeAdapter } from "@multisetai/vps/three";
 const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
 
+// --- kontrak alur-balik ke CopyCat (Flutter) — lihat docs/DEEPLINK-CONTRACT.md ---
+// Halaman ini jalan di Chrome Custom Tab yang diluncurkan CopyCat. "Selesai" harus balik
+// ke app. Cara ANDAL di Chrome Android = intent:// (bukan bare `myrsiy://` yang sering
+// di-drop), dan WAJIB dipicu tap user (gesture) — auto-redirect sesudah sessionend dibuang.
+const RETURN = { scheme: "myrsiy", host: "ar-done", pkg: "com.rsislam.surabaya.rs_islam_app" };
+function returnToApp(params) {
+  const qs = new URLSearchParams(params).toString();
+  // Hasil mis: intent://ar-done?arrived=true#Intent;scheme=myrsiy;package=com.rsislam...;end
+  window.location.href =
+    `intent://${RETURN.host}?${qs}#Intent;scheme=${RETURN.scheme};package=${RETURN.pkg};end`;
+}
+
 const hud = document.getElementById("hud");
 const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—", pos: "—" };
 function draw() {
@@ -155,6 +167,13 @@ async function main() {
   mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
     state.last = "relocalize…"; draw();
     adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
+  });
+
+  // SELESAI — akhiri sesi XR lalu balik ke CopyCat via intent:// (gesture terjaga: sinkron).
+  mkBtn("SELESAI ✓", "#22c55e", "#fff", 136, () => {
+    const arrived = state.nav.includes("SAMPAI");
+    if (session.isActive()) session.stopSession();   // lepas kamera/XR dulu (sinkron)
+    returnToApp({ arrived: String(arrived) });        // hand-off ke app native
   });
 
   draw();
