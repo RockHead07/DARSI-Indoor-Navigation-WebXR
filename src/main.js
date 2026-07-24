@@ -71,9 +71,10 @@ async function main() {
     client,
     overlayRoot: document.body,       // HUD ikut tampil saat AR
     autoLocalize: true,
-    relocalization: true,             // re-localize saat tracking pulih (mis. keluar tangga)
-    backgroundLocalization: true,     // tiap 30s di latar → mapCodes ikut ter-refresh
-    confidenceCheck: true, confidenceThreshold: 0.5,
+    relocalization: true,             // auto re-localize saat tracking pulih dari loss (mis. keluar tangga)
+    backgroundLocalization: true,
+    bgLocalizationInterval: 10,       // 10s (min) — auto-relocalize lebih sering → pulih cepat dari drift/pose-loss
+    confidenceCheck: true, confidenceThreshold: 0.6,   // agak ketat: tolak match lemah
     onSessionStart: () => { renderer.domElement.style.display = "none"; state.session = "AKTIF"; draw(); },
     onSessionEnd:   () => { renderer.domElement.style.display = "block"; state.session = "berhenti"; draw(); },
     // DIAGNOSTIK: intrinsics yang BENAR-BENAR dikirim ke VPS. App native pakai kalibrasi
