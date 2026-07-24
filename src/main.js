@@ -26,13 +26,14 @@ function returnToApp(params) {
 }
 
 const hud = document.getElementById("hud");
-const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—", pos: "—" };
+const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—", pos: "—", intr: "—" };
 function draw() {
   hud.innerHTML =
     `<b>DARSI WebXR</b> — uji navigasi (${MAPSET})\n` +
     `auth    : ${state.auth}\n` +
     `sesi    : ${state.session}\n` +
     `localize: ${state.last}\n` +
+    `intrinsics: ${state.intr}   <b>← fx≈fy≈focal(px); px,py≈½w,½h?</b>\n` +
     `pos(map): ${state.pos}   <b>← Y = kandidat sinyal lantai</b>\n` +
     `mapCodes : ${[...state.seen].join(" | ") || "—"}` +
     (state.seen.size > 1 ? `  <b>✓ §3</b>` : "") + `\n` +
@@ -75,11 +76,18 @@ async function main() {
     confidenceCheck: true, confidenceThreshold: 0.5,
     onSessionStart: () => { renderer.domElement.style.display = "none"; state.session = "AKTIF"; draw(); },
     onSessionEnd:   () => { renderer.domElement.style.display = "block"; state.session = "berhenti"; draw(); },
+    // DIAGNOSTIK: intrinsics yang BENAR-BENAR dikirim ke VPS. App native pakai kalibrasi
+    // kamera asli; jalur web menurunkan dari proyeksi WebXR. Kalau fx≠fy jauh, atau px/py
+    // bukan ~½ width/height, atau fx tak masuk akal utk focal → itu sumber offset sistematis.
+    onCameraIntrinsics: (i) => {
+      state.intr = `fx=${i.fx?.toFixed(0)} fy=${i.fy?.toFixed(0)} px=${i.px?.toFixed(0)} py=${i.py?.toFixed(0)} ${i.width}x${i.height}`;
+      draw();
+    },
     onLocalizationResult: (r) => {
       const d = r.localizeData;
       const codes = (d.mapCodes || []).join(",");
       if (codes) state.seen.add(codes);
-      state.last = `poseFound=${d.poseFound}  conf=${d.confidence?.toFixed(3)}  mapCodes=[${codes}]`;
+      state.last = `poseFound=${d.poseFound}  conf=${d.confidence?.toFixed(3)}  rt=${d.responseTime ?? "?"}ms  mapCodes=[${codes}]`;
       const p = d.position;
       if (p) state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`;
       draw();
