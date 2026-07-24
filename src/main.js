@@ -1,10 +1,11 @@
-// Milestone 2: buktikan LOOP NAVIGASI jalan di WebXR.
-// "Taruh tujuan → navigasi balik": tombol SET TUJUAN merekam posisi user SEKARANG
-// (world space three.js) sebagai tujuan; tiap frame panah + jarak memandu ke sana.
-// Sengaja pakai drop-pin, BUKAN koordinat POI Unity — supaya loop navigasi teruji
-// terpisah dari soal frame-koordinat Unity→VPS + handedness (README §4, belum beres).
-//
-// Milestone 1 (tetap): localize mapset Jemursari + mapCodes = lantai (§3).
+// Milestone 3: NAVIGASI KASAR — uji "cukup gak buat nyampe ruangan".
+// Fokus produk: app KECIL (WebXR, tanpa Unity 365MB) + update tanpa Play Store. Presisi AR
+// BUKAN tujuan — cukup: tahu lantai (pos.Y) + panah arah + jarak + "sampai". Kalau navigasi
+// kasar map-anchored sudah memandu orang ke ruangan meski tilt → web MENANG (kecil+updatable).
+//   - TUJUAN (MAP): rekam tujuan dalam KOORDINAT MAP (dari localize terakhir), di-re-anchor
+//     tiap localize via worldFromMap → INI yang menguji apakah map-anchoring cukup akurat.
+//   - SET TUJUAN (world): drop-pin ARCore (map-independent) — pembanding.
+// showMesh:false — mesh cuma diagnostik; produk tak merender mesh.
 
 import * as THREE from "three";
 import { MultisetClient, XRSessionManager } from "@multisetai/vps/core";
@@ -69,6 +70,8 @@ async function main() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 1000);
 
+  let lastMapPos = null;   // posisi map-space localize terakhir (untuk merekam tujuan MAP)
+
   const session = new XRSessionManager(renderer.getContext(), {
     client,
     overlayRoot: document.body,       // HUD ikut tampil saat AR
@@ -92,7 +95,7 @@ async function main() {
       if (codes) state.seen.add(codes);
       state.last = `poseFound=${d.poseFound}  conf=${d.confidence?.toFixed(3)}  rt=${d.responseTime ?? "?"}ms  mapCodes=[${codes}]`;
       const p = d.position;
-      if (p) state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`;
+      if (p) { state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`; lastMapPos = new THREE.Vector3(p.x, p.y, p.z); }
       draw();
     },
     onLocalizationFailure: (why) => { state.last = `gagal: ${why ?? "—"}`; draw(); },
@@ -121,10 +124,21 @@ async function main() {
   const gizmo = { o: mkDot(0x00ff88), x: mkDot(0xff0000), z: mkDot(0x0088ff) };  // origin/+X/+Z
   let lastOriginWorld = null;
 
+  // --- navigasi MAP-anchored (uji inti) ---
+  let destMap = null;              // tujuan dalam KOORDINAT MAP
+  let lastWorldFromMap = null;     // matrix localize terakhir → re-anchor destMap tiap localize
+  function anchorDest() {          // map-coord → world via worldFromMap; INILAH uji map-anchoring
+    if (!destMap || !lastWorldFromMap) return;
+    destination = destMap.clone().applyMatrix4(lastWorldFromMap);
+    destMarker.position.copy(destination);
+    destMarker.position.y = destination.y - 0.7;
+    destMarker.visible = true; arrow.visible = true;
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: true,   // DIAGNOSTIK: lihat apakah mesh map pas dgn dinding nyata (mesh
-                      // melayang jauh = mislokalisasi, terlihat mata). Produk → false.
+    showMesh: false,  // PRODUK: mesh cuma diagnostik. Uji navigasi kasar tak butuh mesh —
+                      // yang dinilai: apakah PANAH memandu ke ruangan, bukan mesh pas/tidak.
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
       // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
@@ -149,6 +163,8 @@ async function main() {
       const now = gizmo.o.position.clone();
       if (lastOriginWorld) state.drift = `${now.distanceTo(lastOriginWorld).toFixed(2)} m`;
       lastOriginWorld = now;
+      lastWorldFromMap = worldFromMap;
+      if (destMap) anchorDest();   // re-anchor tujuan MAP tiap localize — inti uji akurasi kasar
       draw();
     },
   });
@@ -163,14 +179,25 @@ async function main() {
     document.body.appendChild(b);
   };
 
-  // SET TUJUAN — rekam posisi user SEKARANG (world) sbg tujuan
+  // SET TUJUAN — drop-pin world (ARCore, map-independent) — pembanding
   mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
+    destMap = null;                                                // pin world murni, jangan di-re-anchor
     const wp = new THREE.Vector3(); camera.getWorldPosition(wp);   // world, bukan camera.position
     destination = wp.clone();
     destMarker.position.copy(wp);
     destMarker.position.y = wp.y - 0.7;                            // pangkal pilar mendekati lantai
     destMarker.visible = true; arrow.visible = true;
-    state.nav = "tujuan diset — menjauh lalu kembali";
+    state.nav = "tujuan(world) diset — menjauh lalu kembali";
+    draw();
+  });
+
+  // TUJUAN (MAP) — UJI INTI: rekam posisi map-space SEKARANG sbg tujuan (seolah "ruangan"),
+  // di-re-anchor tiap localize. Menjauh → apakah panah tetap nunjuk ke titik yg benar?
+  mkBtn("TUJUAN (MAP)", "#a855f7", "#fff", 192, () => {
+    if (!lastMapPos) { state.nav = "belum ada localize — arahkan sampai poseFound dulu"; draw(); return; }
+    destMap = lastMapPos.clone();
+    anchorDest();
+    state.nav = "tujuan(MAP) diset — menjauh, cek panah balik ke titik benar?";
     draw();
   });
 
