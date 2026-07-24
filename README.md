@@ -303,7 +303,7 @@ tak bisa disentuh dari meja, kerja meja diurut **value-per-effort menuju tes lap
 - [x] **Protokol scan** — `docs/SCAN-PROTOCOL.md` (§9 #1, dari panduan resmi MultiSet)
 - [ ] **Cek dashboard Jemursari** — `docs/DASHBOARD-CHECK-JEMURSARI.md` (§9 #2, pemilik)
 - [ ] Re-scan Jemursari dgn protokol → uji ulang stabilitas localize (§9 #3)
-- [~] Alur balik Chrome→Flutter — setengah-WebXR SUDAH (tombol SELESAI + `intent://`); setengah-Flutter menyusul (§9 #4)
+- [~] Alur balik Chrome→Flutter — WebXR (SELESAI+`intent://`) & Flutter receiver (`app_links`) SUDAH; sisa: launch via Custom Tab (`flutter_custom_tabs`) — ditunda s/d WebXR final (§9 #4)
 - [ ] Mesin A* — ditunda sampai exporter+solve-frame ada (§9 #5)
 - [ ] Proxy token backend FastAPI (§9 #6)
 - [ ] Rotasi kredensial ter-expose
