@@ -137,7 +137,7 @@ async function main() {
 
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: false,  // PRODUK: mesh cuma diagnostik. Uji navigasi kasar tak butuh mesh —
+    showMesh: true,  // PRODUK: mesh cuma diagnostik. Uji navigasi kasar tak butuh mesh —
                       // yang dinilai: apakah PANAH memandu ke ruangan, bukan mesh pas/tidak.
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
