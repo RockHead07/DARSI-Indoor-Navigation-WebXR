@@ -232,39 +232,65 @@ async function main() {
     document.body.appendChild(b);
   };
 
-  // SET TUJUAN — drop-pin world (ARCore, map-independent) — pembanding
-  mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
-    destMap = null;                                                // pin world murni, jangan di-re-anchor
-    const wp = new THREE.Vector3(); camera.getWorldPosition(wp);   // world, bukan camera.position
-    destination = wp.clone();
-    destMarker.position.copy(wp);
-    destMarker.position.y = wp.y - 0.7;                            // pangkal pilar mendekati lantai
-    destMarker.visible = true; arrow.visible = true;
-    state.nav = "tujuan(world) diset — menjauh lalu kembali";
+  // Tombol developer hanya muncul jika bukan POI mode (atau POI tidak ditemukan)
+  if (!poiMode || !activePoi) {
+    // SET TUJUAN — drop-pin world (ARCore, map-independent) — pembanding
+    mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
+      destMap = null;
+      const wp = new THREE.Vector3(); camera.getWorldPosition(wp);
+      destination = wp.clone();
+      destMarker.position.copy(wp);
+      destMarker.position.y = wp.y - 0.7;
+      destMarker.visible = true; arrow.visible = true;
+      state.nav = "tujuan(world) diset — menjauh lalu kembali";
+      draw();
+    });
+
+    // TUJUAN (MAP) — UJI INTI: rekam posisi map-space SEKARANG sbg tujuan
+    mkBtn("TUJUAN (MAP)", "#a855f7", "#fff", 192, () => {
+      if (!lastMapPos) { state.nav = "belum ada localize — arahkan sampai poseFound dulu"; draw(); return; }
+      destMap = lastMapPos.clone();
+      anchorDest();
+      state.nav = "tujuan(MAP) diset — menjauh, cek panah balik ke titik benar?";
+      draw();
+    });
+
+    // RELOCALIZE — picu localize manual
+    mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
+      state.last = "relocalize…"; draw();
+      adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
+    });
+  }
+
+  // REKAM POI — selalu ada (alat pengisian data lapangan)
+  mkBtn("REKAM POI 📍", "#f97316", "#fff", 136, () => {
+    if (!lastMapPos) {
+      state.nav = "Belum ada pose — arahkan kamera ke sekeliling dulu.";
+      draw(); return;
+    }
+    const isFloor2 = lastMapPos.y >= 1.5;
+    const floor = isFloor2 ? 2 : 1;
+    const mapCode = [...state.seen][0] ?? "MAP_???";
+    const snippet = JSON.stringify({
+      id: "",
+      name: "",
+      floor,
+      mapCode,
+      position: {
+        x: parseFloat(lastMapPos.x.toFixed(2)),
+        y: parseFloat(lastMapPos.y.toFixed(2)),
+        z: parseFloat(lastMapPos.z.toFixed(2)),
+      },
+    }, null, 2);
+    state.nav = `📍 REKAM POI (copy ke pois.json):\n${snippet}`;
     draw();
   });
 
-  // TUJUAN (MAP) — UJI INTI: rekam posisi map-space SEKARANG sbg tujuan (seolah "ruangan"),
-  // di-re-anchor tiap localize. Menjauh → apakah panah tetap nunjuk ke titik yg benar?
-  mkBtn("TUJUAN (MAP)", "#a855f7", "#fff", 192, () => {
-    if (!lastMapPos) { state.nav = "belum ada localize — arahkan sampai poseFound dulu"; draw(); return; }
-    destMap = lastMapPos.clone();
-    anchorDest();
-    state.nav = "tujuan(MAP) diset — menjauh, cek panah balik ke titik benar?";
-    draw();
-  });
-
-  // RELOCALIZE — picu localize manual (perbaiki pose bila tracking meleset)
-  mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
-    state.last = "relocalize…"; draw();
-    adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
-  });
-
-  // SELESAI — akhiri sesi XR lalu balik ke CopyCat via intent:// (gesture terjaga: sinkron).
-  mkBtn("SELESAI ✓", "#22c55e", "#fff", 136, () => {
+  // SELESAI — akhiri sesi XR lalu balik ke Flutter via intent://
+  mkBtn("SELESAI ✓", "#22c55e", "#fff", (poiMode && activePoi) ? 24 : 248, () => {
     const arrived = state.nav.includes("SAMPAI");
-    if (session.isActive()) session.stopSession();   // lepas kamera/XR dulu (sinkron)
-    returnToApp({ arrived: String(arrived) });        // hand-off ke app native
+    if (session.isActive()) session.stopSession();
+    returnToApp({ arrived: String(arrived) });
   });
 
   draw();
