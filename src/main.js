@@ -73,7 +73,7 @@ async function main() {
   const session = new XRSessionManager(renderer.getContext(), {
     client,
     overlayRoot: document.body,       // HUD ikut tampil saat AR
-    referenceSpaceType: "local-floor", // lantai acuan fisik ARCore
+    referenceSpaceType: "local",      // 'local' dijamin didukung oleh semua perangkat WebXR
     autoLocalize: true,
     relocalization: true,             // auto re-localize saat tracking pulih dari loss (mis. keluar tangga)
     backgroundLocalization: true,

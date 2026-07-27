@@ -18,7 +18,7 @@ app sendiri. Tujuan: buktikan WebXR+VPS bisa menggantikan runtime Unity (UaaL).
 - **Lantai dibaca dari `position.Y`, BUKAN `mapCodes[0]`** (§3 — urutan mapCodes = artefak hint).
 - **Dilarang panggil `renderer.setPixelRatio()`** — merusak matriks intrinsics kamera SDK `ThreeAdapter` & membuat pose/mesh offset parah.
 - **Wajib sediakan `/draco/` decoders** di `public/draco/` saat `showMesh: true` agar mesh GLTF Draco tidak gagal muat secara diam-diam.
-- **Gunakan `referenceSpaceType: "local-floor"`** pada `XRSessionManager` untuk menyelaraskan elevasi dengan permukaan lantai fisik.
+- **Gunakan `referenceSpaceType: "local"`** pada `XRSessionManager` ('local' dijamin didukung semua HP, 'local-floor' melempar error requestReferenceSpace di banyak HP Android).
 - **Kamera WebXR three.js:** pakai `camera.getWorldPosition()`/`getWorldDirection()`,
   bukan `camera.position` (basi di sesi XR).
 
