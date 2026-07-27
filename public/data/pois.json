@@ -1,0 +1,12 @@
+{
+  "mapSetCode": "MSET_PKRKGGFB1RO0",
+  "pois": [
+    {
+      "id": "CONTOH_PLACEHOLDER",
+      "name": "Titik Uji Placeholder",
+      "floor": 1,
+      "mapCode": "MAP_BCADVLIXFSJE",
+      "position": { "x": -1.9, "y": -0.5, "z": 34.3 }
+    }
+  ]
+}
