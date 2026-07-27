@@ -62,9 +62,7 @@ async function main() {
   catch (e) { return fail(`authorize gagal: ${e.message} (cek CORS domain di dashboard MultiSet)`); }
   draw();
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(devicePixelRatio);
-  renderer.setSize(innerWidth, innerHeight);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -75,6 +73,7 @@ async function main() {
   const session = new XRSessionManager(renderer.getContext(), {
     client,
     overlayRoot: document.body,       // HUD ikut tampil saat AR
+    referenceSpaceType: "local-floor", // lantai acuan fisik ARCore
     autoLocalize: true,
     relocalization: true,             // auto re-localize saat tracking pulih dari loss (mis. keluar tangga)
     backgroundLocalization: true,
