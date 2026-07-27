@@ -55,6 +55,8 @@ async function main() {
   const client = new MultisetClient({
     clientId: ID, clientSecret: SECRET,
     mapType: "map-set", code: MAPSET, hintMapCodes: FLOORS,
+    passGeoPose: true,    // kirim GPS browser ke VPS sebagai geo-hint (eksperimental)
+    use2DFiltering: true, // skip altitude GPS — tidak akurat di dalam gedung
     // isRightHanded default true = BENAR (Tahap A terbukti: false memirror sumbu X → lt1
     // ambruk, lt2 geser 12m). Jadi tilt lt2 BUKAN handedness. Jangan diutak-atik lagi.
   });
