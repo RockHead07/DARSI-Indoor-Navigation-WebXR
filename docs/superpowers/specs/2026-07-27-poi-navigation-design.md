@@ -28,6 +28,7 @@ Tambahkan sistem navigasi berbasis POI ke `main.js` sehingga:
 2. Jika tidak ada `?poiId=` → mode developer tetap jalan (tombol lama tidak berubah).
 3. Koordinat POI disimpan dalam `public/data/pois.json` sebagai sumber kebenaran tunggal.
 4. Semua koordinat POI **wajib direkam dari VPS langsung** (via tombol REKAM POI) — tidak dari Unity — untuk menghindari masalah konversi handedness.
+5. **(Eksperimental)** Aktifkan `passGeoPose` di `MultisetClient` untuk mengirim GPS browser ke server VPS sebagai geo-hint — berpotensi mengurangi false-match ke map/gedung lain.
 
 ---
 
@@ -200,6 +201,34 @@ if (!poiMode) {
 mkBtn("REKAM POI", ...);  // selalu ada
 mkBtn("SELESAI ✓", ...);  // selalu ada
 ```
+
+---
+
+## Eksperimental: `passGeoPose` (Geo-Hint VPS)
+
+Tambahkan dua parameter ke `MultisetClient` di `main.js`:
+
+```js
+const client = new MultisetClient({
+  clientId: ID, clientSecret: SECRET,
+  mapType: "map-set", code: MAPSET, hintMapCodes: FLOORS,
+  passGeoPose: true,    // kirim GPS browser ke VPS server sebagai geo-hint
+  use2DFiltering: true, // skip altitude GPS (tidak akurat di dalam gedung)
+});
+```
+
+SDK otomatis memanggil `navigator.geolocation` sebelum setiap request localize.
+Browser akan meminta izin lokasi ke user satu kali.
+
+**Ekspektasi yang realistis:**
+
+| Kondisi | Efek `passGeoPose` |
+|---|---|
+| Outdoor / dekat jendela | GPS akurasi 3–10 m → hint berguna, bisa eliminasi gedung salah |
+| Indoor jauh dari jendela | GPS akurasi 10–50 m+ → hint lemah, tapi tidak memperburuk |
+| Koridor mirip antar-lantai | GPS **tidak cukup presisi** untuk membedakan — bukan solusi untuk blocker §3.5 |
+
+**Kesimpulan:** Aman diaktifkan, tanpa downside. Berpotensi membantu jika masalah adalah false-match ke gedung/area berbeda. **Tidak menggantikan** perbaikan kualitas scan map.
 
 ---
 
