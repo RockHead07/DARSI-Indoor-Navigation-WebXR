@@ -175,6 +175,16 @@ async function main() {
     destMarker.visible = true; arrow.visible = true;
   }
 
+  // --- POI navigation: transform koordinat map-space POI ke world-space ---
+  function anchorPoiDest(poi, worldFromMap) {
+    const mapPos = new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z);
+    destination = mapPos.applyMatrix4(worldFromMap);
+    destMarker.position.copy(destination);
+    destMarker.position.y = destination.y - 0.7;  // pangkal pilar mendekati lantai
+    destMarker.visible = true;
+    arrow.visible = true;
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
     showMesh: true,  // PRODUK: mesh cuma diagnostik. Uji navigasi kasar tak butuh mesh —
@@ -189,7 +199,9 @@ async function main() {
       arrow.position.copy(user).addScaledVector(fwd, 0.8);
       const dir = flat.clone().sub(arrow.position); dir.y = 0;
       if (dir.lengthSq() > 1e-4) arrow.setDirection(dir.normalize());
-      state.nav = dist < 0.8 ? "✓ SAMPAI di tujuan" : `jarak ${dist.toFixed(1)} m → ikuti panah`;
+      const arrivedLabel = activePoi ? `✓ SAMPAI di ${activePoi.name}` : "✓ SAMPAI di tujuan";
+      const navLabel = activePoi ? activePoi.name : "tujuan";
+      state.nav = dist < 1.2 ? arrivedLabel : `jarak ${dist.toFixed(1)} m → ikuti panah ke ${navLabel}`;
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
@@ -204,7 +216,8 @@ async function main() {
       if (lastOriginWorld) state.drift = `${now.distanceTo(lastOriginWorld).toFixed(2)} m`;
       lastOriginWorld = now;
       lastWorldFromMap = worldFromMap;
-      if (destMap) anchorDest();   // re-anchor tujuan MAP tiap localize — inti uji akurasi kasar
+      if (activePoi) anchorPoiDest(activePoi, worldFromMap);  // POI mode: re-anchor tiap localize
+      else if (destMap) anchorDest();                          // Developer mode: re-anchor destMap
       draw();
     },
   });
