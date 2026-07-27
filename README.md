@@ -300,6 +300,7 @@ tak bisa disentuh dari meja, kerja meja diurut **value-per-effort menuju tes lap
 - [ ] **Cek Localization Heatmap Jemursari** (dashboard MultiSet) — bukti scan jelek?
 - [ ] **Ukur `geser` map A. Yani** (target sebenarnya; butuh di lokasi)
 - [x] **Sinyal lantai FINAL = `position.Y`** — lt1 Y=−0.5, lt2 Y=3.7 (Δ4.2m); frame mapset, threshold sederhana (ganti mapCodes[0])
+- [x] **Fix setup WebXR & SDK** — hapus `setPixelRatio` (penyebab intrinsics meleset & mesh offset), tambah `referenceSpaceType: 'local-floor'`, sediakan `/draco/` decoders
 - [x] **Protokol scan** — `docs/SCAN-PROTOCOL.md` (§9 #1, dari panduan resmi MultiSet)
 - [ ] **Cek dashboard Jemursari** — `docs/DASHBOARD-CHECK-JEMURSARI.md` (§9 #2, pemilik)
 - [ ] Re-scan Jemursari dgn protokol → uji ulang stabilitas localize (§9 #3)

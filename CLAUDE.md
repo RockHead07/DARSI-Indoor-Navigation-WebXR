@@ -16,11 +16,16 @@ app sendiri. Tujuan: buktikan WebXR+VPS bisa menggantikan runtime Unity (UaaL).
   POI/navigasi map-anchored di atas localize yang belum stabil (< ~1 m) — itu
   membangun di atas pondasi salah. Kerja yang boleh jalan tanpa map stabil: README §9.
 - **Lantai dibaca dari `position.Y`, BUKAN `mapCodes[0]`** (§3 — urutan mapCodes = artefak hint).
+- **Dilarang panggil `renderer.setPixelRatio()`** — merusak matriks intrinsics kamera SDK `ThreeAdapter` & membuat pose/mesh offset parah.
+- **Wajib sediakan `/draco/` decoders** di `public/draco/` saat `showMesh: true` agar mesh GLTF Draco tidak gagal muat secara diam-diam.
+- **Gunakan `referenceSpaceType: "local-floor"`** pada `XRSessionManager` untuk menyelaraskan elevasi dengan permukaan lantai fisik.
 - **Kamera WebXR three.js:** pakai `camera.getWorldPosition()`/`getWorldDirection()`,
   bukan `camera.position` (basi di sesi XR).
 
 ## Aturan kerja
 
+- **Jangan terlalu overengineering, dan gunakan YAGNI, eksekusi gunakan ponytail as always.**
+- **Jika mulai tersesat, BACA LAGI dokumentasi MultiSet & link npm `@multisetai/vps`** (`node_modules/@multisetai/vps/README.md`). Percayakan setup WebGL/Three.js ke `ThreeAdapter`, jangan buat tweak manual (seperti `setPixelRatio` / custom canvas) yang berpotensi merusak intrinsics kamera SDK.
 - **Commit sebagai pemilik (Bagus Insan Pradana), TANPA `Co-Authored-By`.** Ini
   keputusan sadar — jangan jadikan diri collaborator di repo ekosistem ini.
 - **Jangan push tanpa "ya" eksplisit.** Pemilik yang push.
