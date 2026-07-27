@@ -43,6 +43,18 @@ function draw() {
 }
 const fail = (m) => { hud.innerHTML = `<span class="err">✗ ${m}</span>`; };
 
+// --- POI: load dari pois.json berdasarkan ?poiId= di URL ---
+async function loadPoi(poiId) {
+  try {
+    const res = await fetch("/data/pois.json");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const db = await res.json();
+    return db.pois.find((p) => p.id === poiId) ?? null;
+  } catch (e) {
+    return null; // fetch gagal → fallback ke Mode Developer
+  }
+}
+
 const ID = import.meta.env.VITE_MS_CLIENT_ID;
 const SECRET = import.meta.env.VITE_MS_CLIENT_SECRET;
 if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.local");
@@ -50,6 +62,23 @@ if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.
 async function main() {
   if (!(await ThreeAdapter.isSupported())) {
     return fail("WebXR immersive-ar tidak didukung. Buka di Chrome Android + ARCore.");
+  }
+
+  // --- deteksi mode POI vs Developer ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const rawPoiId = urlParams.get("poiId");
+  let activePoi = null;
+  const poiMode = rawPoiId !== null;
+
+  if (poiMode) {
+    activePoi = await loadPoi(rawPoiId);
+    if (!activePoi) {
+      state.nav = `POI '${rawPoiId}' tidak ditemukan.`;
+      draw();
+    } else {
+      state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
+      draw();
+    }
   }
 
   const client = new MultisetClient({
