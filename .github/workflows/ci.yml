@@ -1,0 +1,36 @@
+name: CI / Build Validation
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-build:
+    name: Build & Validate Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Validate JSON Assets
+        run: |
+          node -e 'JSON.parse(require("fs").readFileSync("public/data/pois.json", "utf8"))'
+          echo "✓ pois.json is valid JSON"
+
+      - name: Test Production Build
+        run: npm run build
+        env:
+          VITE_MS_CLIENT_ID: ${{ secrets.VITE_MS_CLIENT_ID || 'ci_placeholder_id' }}
+          VITE_MS_CLIENT_SECRET: ${{ secrets.VITE_MS_CLIENT_SECRET || 'ci_placeholder_secret' }}
