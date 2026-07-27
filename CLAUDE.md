@@ -15,7 +15,7 @@ app sendiri. Tujuan: buktikan WebXR+VPS bisa menggantikan runtime Unity (UaaL).
 - **⛔ Blocker localize (README §3.5).** Map Jemursari lompat 5–60 m. Jangan bangun
   POI/navigasi map-anchored di atas localize yang belum stabil (< ~1 m) — itu
   membangun di atas pondasi salah. Kerja yang boleh jalan tanpa map stabil: README §9.
-- **Lantai dibaca dari `position.Y`, BUKAN `mapCodes[0]`** (§3 — urutan mapCodes = artefak hint).
+- **Lantai dibaca dari `position.Y`, BUKAN `mapCodes[0]`** (§3 — urutan mapCodes = artefak hint). Untuk `ThreeAdapter` (saat `showMesh: true`), wajib urutkan `d.mapCodes` di `onLocalizationResult` berdasarkan `position.Y` ($Y \ge 1.5\text{m} \rightarrow$ `MAP_MW...` di index 0) agar SDK memuat file mesh GLTF lantai yang benar (bukan memuat mesh Lt 1 di Lt 2).
 - **Dilarang panggil `renderer.setPixelRatio()`** — merusak matriks intrinsics kamera SDK `ThreeAdapter` & membuat pose/mesh offset parah.
 - **Wajib sediakan `/draco/` decoders** di `public/draco/` saat `showMesh: true` agar mesh GLTF Draco tidak gagal muat secara diam-diam.
 - **Gunakan `referenceSpaceType: "local"`** pada `XRSessionManager` ('local' dijamin didukung semua HP, 'local-floor' melempar error requestReferenceSpace di banyak HP Android).

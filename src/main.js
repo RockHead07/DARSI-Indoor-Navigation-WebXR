@@ -90,11 +90,21 @@ async function main() {
     },
     onLocalizationResult: (r) => {
       const d = r.localizeData;
+      const p = d.position;
+      if (p) {
+        state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`;
+        lastMapPos = new THREE.Vector3(p.x, p.y, p.z);
+
+        // KOREKSI MESH SDK: Urutkan mapCodes berdasarkan elevasi Y real-time.
+        // Y >= 1.5m = Lantai 2 (MAP_MW1QTZWG1TLG di index 0)
+        // Y <  1.5m = Lantai 1 (MAP_BCADVLIXFSJE di index 0)
+        // Dengan ini ThreeAdapter akan memuat mesh GLTF lantai yang BENAR (bukan tertukar).
+        const isFloor2 = p.y >= 1.5;
+        d.mapCodes = isFloor2 ? ["MAP_MW1QTZWG1TLG", "MAP_BCADVLIXFSJE"] : ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];
+      }
       const codes = (d.mapCodes || []).join(",");
       if (codes) state.seen.add(codes);
       state.last = `poseFound=${d.poseFound}  conf=${d.confidence?.toFixed(3)}  rt=${d.responseTime ?? "?"}ms  mapCodes=[${codes}]`;
-      const p = d.position;
-      if (p) { state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`; lastMapPos = new THREE.Vector3(p.x, p.y, p.z); }
       draw();
     },
     onLocalizationFailure: (why) => { state.last = `gagal: ${why ?? "—"}`; draw(); },
