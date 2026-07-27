@@ -7,6 +7,13 @@
       "floor": 1,
       "mapCode": "MAP_BCADVLIXFSJE",
       "position": { "x": -1.9, "y": -0.5, "z": 34.3 }
+    },
+    {
+      "id": "POIKU_1",
+      "name": "Titik Rekam Lapangan (Lt 2)",
+      "floor": 2,
+      "mapCode": "MAP_MW1QTZWG1TLG,MAP_BCADVLIXFSJE",
+      "position": { "x": -1.56, "y": 3.81, "z": 39.58 }
     }
   ]
 }
