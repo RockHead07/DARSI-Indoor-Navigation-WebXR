@@ -113,10 +113,20 @@ async function main() {
     }
   }
 
+  // --- Pre-fetch Geolocation di 2D mode (ADR-W005) ---
+  // Menghangatkan izin GPS di luar sesi WebXR agar tidak memicu dialog OS/focus-loss saat AR aktif
+  if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      () => {},
+      () => {},
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+    );
+  }
+
   const client = new MultisetClient({
     clientId: ID, clientSecret: SECRET,
     mapType: "map-set", code: MAPSET, hintMapCodes: FLOORS,
-    passGeoPose: true,    // kirim GPS browser ke VPS sebagai geo-hint (eksperimental)
+    passGeoPose: true,    // kirim GPS browser ke VPS sebagai geo-hint (pre-fetched & cached)
     use2DFiltering: true, // skip altitude GPS — tidak akurat di dalam gedung
     // isRightHanded default true = BENAR (Tahap A terbukti: false memirror sumbu X → lt1
     // ambruk, lt2 geser 12m). Jadi tilt lt2 BUKAN handedness. Jangan diutak-atik lagi.
@@ -138,12 +148,13 @@ async function main() {
     overlayRoot: document.body,       // HUD ikut tampil saat AR
     referenceSpaceType: "local",      // 'local' dijamin didukung oleh semua perangkat WebXR
     autoLocalize: true,
+    poseTimeoutMs: 20000,             // 20s grace period untuk ARCore warm-up di awal sesi (ADR-W005)
     relocalization: true,             // auto re-localize saat tracking pulih dari loss (mis. keluar tangga)
     backgroundLocalization: true,
     bgLocalizationInterval: 10,       // 10s (min) — auto-relocalize lebih sering → pulih cepat dari drift/pose-loss
-    confidenceCheck: true, confidenceThreshold: 0.6,   // agak ketat: tolak match lemah
+    confidenceCheck: true, confidenceThreshold: 0.5,   // threshold seimbang untuk indoor
     onSessionStart: () => { renderer.domElement.style.display = "none"; state.session = "AKTIF"; draw(); },
-    onSessionEnd:   () => { renderer.domElement.style.display = "block"; state.session = "berhenti"; draw(); },
+    onSessionEnd:   () => { renderer.domElement.style.display = "block"; state.session = "berhenti (sesi WebXR diakhiri browser/user)"; draw(); },
     // DIAGNOSTIK: intrinsics yang BENAR-BENAR dikirim ke VPS. App native pakai kalibrasi
     // kamera asli; jalur web menurunkan dari proyeksi WebXR. Kalau fx≠fy jauh, atau px/py
     // bukan ~½ width/height, atau fx tak masuk akal utk focal → itu sumber offset sistematis.

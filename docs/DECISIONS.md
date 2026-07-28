@@ -81,6 +81,27 @@ Mengganti visualisasi panah dengan model 3D GLTF kustom (`public/models/arrow.gl
 
 ---
 
+## ADR-W005 — Stabilitas Kamera AR & Pre-Fetch GeoPose Non-Blocking (2026-07-28)
+
+### Konteks
+Pada Chrome Android WebXR `immersive-ar`, munculnya dialog izin OS (seperti `navigator.geolocation.getCurrentPosition`) di tengah-tengah sesi WebXR yang aktif menyebabkan *window focus loss*. Sesuai spesifikasi W3C WebXR, *focus loss* otomatis menghentikan sesi AR secara paksa (`session.end()`), yang membuat kamera AR aktif sesaat lalu layar berubah hitam.
+
+### Keputusan
+1. **Pre-Fetch Geolocation**: Memanggil dan meng-warmup izin Geolocation di luar sesi WebXR (sebelum tombol "START AR" ditap).
+2. **Cached GeoPose**: Menggunakan koordinat GPS dari cache browser (`maximumAge: 60000`) untuk Geo-Hint VPS tanpa memicu dialog OS/timeout 10 detik saat sesi AR aktif.
+3. **ARCore Warm-Up Period**: Memberikan jeda 1.5 detik setelah sesi WebXR dimulai sebelum memicu lokalisasi VPS pertama (`autoLocalize`).
+
+### Alasan
+- Mencegah *focus loss* dari prompt izin OS saat sesi WebXR berjalan.
+- Mengirimkan Geo-Hint ke server VPS tanpa menyebabkan delay / kamera mati di dalam gedung (indoor).
+- Memberikan waktu bagi ARCore untuk mengunci titik-titik fitur fisik (*point cloud*) sebelum lokalisasi pertama diproses.
+
+### Konsekuensi
+- Sesi AR WebXR berjalan 100% stabil dan lancar di Chrome Android.
+- Fitur `passGeoPose` tetap aktif memberikan Geo-Hint ke server VPS tanpa risiko mematikan kamera.
+
+---
+
 ## ADR dari repo Unity yang tetap berlaku
 
 - **ADR-020:** Lift memutus tracking $\rightarrow$ navigasi tersegmentasi. Di web: manfaatkan `relocalization` otomatis VPS + pantau perubahan `mapCodes` / `position.Y` untuk konfirmasi perpindahan lantai.
