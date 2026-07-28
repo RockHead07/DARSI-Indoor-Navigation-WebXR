@@ -1,0 +1,34 @@
+{
+  "nodes": [
+    {
+      "id": "NODE_LT2_START",
+      "name": "Koridor Utama Lantai 2",
+      "floor": 2,
+      "position": { "x": -2.0, "y": 3.7, "z": 34.3 }
+    },
+    {
+      "id": "NODE_LT2_MID",
+      "name": "Persimpangan Koridor Lantai 2",
+      "floor": 2,
+      "position": { "x": -1.8, "y": 3.8, "z": 37.0 }
+    },
+    {
+      "id": "POIKU_1",
+      "name": "Poliklinik Azzara 201",
+      "floor": 2,
+      "position": { "x": -1.56, "y": 3.81, "z": 39.58 }
+    }
+  ],
+  "edges": [
+    {
+      "from": "NODE_LT2_START",
+      "to": "NODE_LT2_MID",
+      "distance": 2.7
+    },
+    {
+      "from": "NODE_LT2_MID",
+      "to": "POIKU_1",
+      "distance": 2.6
+    }
+  ]
+}
