@@ -207,6 +207,11 @@ async function main() {
   allPoiMarkersGroup.visible = false;
   scene.add(allPoiMarkersGroup);
 
+  // Group visualisasi 3D Graph Koridor A* Pathfinding (Mode Admin)
+  const navGraphLinesGroup = new THREE.Group();
+  navGraphLinesGroup.visible = false;
+  scene.add(navGraphLinesGroup);
+
   // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
   const arrowGroup = new THREE.Group();
   arrowGroup.visible = false;
@@ -458,6 +463,43 @@ async function main() {
     });
   }
 
+  function renderNavGraphOverlay(worldFromMap) {
+    while (navGraphLinesGroup.children.length > 0) {
+      navGraphLinesGroup.remove(navGraphLinesGroup.children[0]);
+    }
+    if (!navGraph || !navGraph.nodes || !navGraph.edges) return;
+
+    const nodeWorldPositions = new Map();
+    navGraph.nodes.forEach((n) => {
+      const wPos = new THREE.Vector3(n.position.x, n.position.y, n.position.z).applyMatrix4(worldFromMap);
+      nodeWorldPositions.set(n.id, wPos);
+
+      // Titik node persimpangan (Kuning emas 3D sphere)
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+      );
+      dot.position.copy(wPos);
+      dot.renderOrder = 1;
+      navGraphLinesGroup.add(dot);
+    });
+
+    // Garis koridor penghubung (Kuning cerah)
+    navGraph.edges.forEach((e) => {
+      const p1 = nodeWorldPositions.get(e.from);
+      const p2 = nodeWorldPositions.get(e.to);
+      if (p1 && p2) {
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const line = new THREE.Line(
+          geometry,
+          new THREE.LineBasicMaterial({ color: 0xfde047, linewidth: 2 })
+        );
+        line.renderOrder = 1;
+        navGraphLinesGroup.add(line);
+      }
+    });
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
     showMesh: true,           // Muat mesh gedung VPS untuk digunakan sebagai Invisible Depth Occluder
@@ -501,6 +543,7 @@ async function main() {
       // Terapkan Invisible Depth Mask Material ke mesh gedung VPS yang baru dimuat
       applyOccluderMaterial(scene);
       renderAllPoisOverlay(worldFromMap);
+      renderNavGraphOverlay(worldFromMap);
 
       // Ukur MENTAH, jangan mask. Update gizmo di tempat (tidak menumpuk) dan catat
       // berapa origin bergeser antar-localize = repeatability VPS + drift tracking.
@@ -589,6 +632,7 @@ async function main() {
   function updateDebugVisibility() {
     const isDebug = toggleDebugMode ? toggleDebugMode.checked : false;
     allPoiMarkersGroup.visible = isDebug;
+    navGraphLinesGroup.visible = isDebug;
     devButtonsGroup.forEach((b) => {
       b.style.display = isDebug ? "block" : "none";
     });
