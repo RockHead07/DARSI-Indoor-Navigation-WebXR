@@ -478,6 +478,11 @@ async function main() {
         anchorPoiDest(activePoi, lastWorldFromMap);
       }
       draw();
+
+      // Pemicu 1-Tap AR: Mulai sesi WebXR AR jika belum aktif
+      if (!adapter.isActive()) {
+        void adapter.startSession();
+      }
     };
   }
 
@@ -493,6 +498,11 @@ async function main() {
       panelActive?.classList.add("hidden");
       panelStandby?.classList.remove("hidden");
       draw();
+
+      // Hentikan sesi WebXR AR jika sedang aktif
+      if (adapter.isActive()) {
+        adapter.stopSession();
+      }
     };
   }
 
