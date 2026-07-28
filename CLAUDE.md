@@ -32,7 +32,7 @@ app sendiri. Tujuan: buktikan WebXR+VPS bisa menggantikan runtime Unity (UaaL).
 - **YAGNI. Jangan overengineering.**
 - **Jika mulai tersesat, BACA LAGI** `node_modules/@multisetai/vps/README.md`.
 - **Commit sebagai pemilik (Bagus Insan Pradana), TANPA `Co-Authored-By`.**
-- **Jangan spam commit:** Minta konfirmasi/persetujuan ("bendera hijau") dulu ke user sebelum melakukan `git commit`. Beritahukan perubahan apa yang akan di-commit.
+- **Kebijakan Commit:** DILARANG sering/spam commit. Commit hanya dipertimbangkan jika perubahan bersifat **major** dan berpengaruh langsung ke Vercel/deployment, serta WAJIB meminta persetujuan ("bendera hijau") dari user terlebih dahulu.
 - **Jangan push tanpa "ya" eksplisit.** Pemilik yang push.
 - **Kredensial** ter-expose → wajib rotasi + proxy backend (`docs/KNOWN-ISSUES.md`).
 - **Cari akar, bukan gejala** (`docs/DECISIONS.md` — band-aid filter outlier ditolak).
