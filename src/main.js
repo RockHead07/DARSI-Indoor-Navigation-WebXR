@@ -142,6 +142,13 @@ async function main() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 1000);
 
+  // Pencahayaan Scene 3D
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(1, 2, 3);
+  scene.add(dirLight);
+
   let lastMapPos = null;   // posisi map-space localize terakhir (untuk merekam tujuan MAP)
 
   const session = new XRSessionManager(renderer.getContext(), {
@@ -218,13 +225,11 @@ async function main() {
       // Koreksi orientasi: putar 180 deg (Math.PI) agar ujung panah pas mengarah ke -Z Three.js
       model.rotation.y = Math.PI;
 
-      // Ubah warna material panah menjadi Hijau Pastel Mint (0x6ee7b7)
+      // Ubah warna material panah menjadi Hijau Pastel Mint Vibrant (0x34d399 / MeshBasicMaterial)
       model.traverse((child) => {
         if (child.isMesh) {
-          child.material = new THREE.MeshStandardMaterial({
-            color: 0x6ee7b7,      // Hijau pastel mint modern
-            roughness: 0.35,
-            metalness: 0.1,
+          child.material = new THREE.MeshBasicMaterial({
+            color: 0x34d399,      // Hijau pastel mint vibrant yang selalu menyala jernih
           });
         }
       });
