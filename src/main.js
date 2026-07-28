@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { MultisetClient, XRSessionManager } from "@multisetai/vps/core";
 import { ThreeAdapter } from "@multisetai/vps/three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
@@ -150,10 +151,35 @@ async function main() {
   destMarker.visible = false;
   scene.add(destMarker);
 
-  const arrow = new THREE.ArrowHelper(           // panah pemandu, melayang di depan kamera
+  // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
+  const arrowGroup = new THREE.Group();
+  arrowGroup.visible = false;
+  scene.add(arrowGroup);
+
+  const fallbackArrow = new THREE.ArrowHelper(
     new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 0.4, 0x00ff88, 0.15, 0.09);
-  arrow.visible = false;
-  scene.add(arrow);
+  arrowGroup.add(fallbackArrow);
+
+  const gltfLoader = new GLTFLoader();
+  gltfLoader.load(
+    "/models/arrow.gltf",
+    (gltf) => {
+      const model = gltf.scene;
+      // Normalisasi ukuran model panah (panjang/dimensi maks ~0.35 meter)
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 0) {
+        const scale = 0.35 / maxDim;
+        model.scale.set(scale, scale, scale);
+      }
+      arrowGroup.remove(fallbackArrow);
+      arrowGroup.add(model);
+    },
+    undefined,
+    (err) => console.warn("Gagal memuat 3D model panah /models/arrow.gltf, memakai fallback:", err)
+  );
 
   // gizmo koordinat map — DIBUAT SEKALI, di-update tiap localize (jangan menumpuk).
   const mkDot = (c) => {
@@ -172,7 +198,7 @@ async function main() {
     destination = destMap.clone().applyMatrix4(lastWorldFromMap);
     destMarker.position.copy(destination);
     destMarker.position.y = destination.y - 0.7;
-    destMarker.visible = true; arrow.visible = true;
+    destMarker.visible = true; arrowGroup.visible = true;
   }
 
   // --- POI navigation: transform koordinat map-space POI ke world-space ---
@@ -182,7 +208,7 @@ async function main() {
     destMarker.position.copy(destination);
     destMarker.position.y = destination.y - 0.7;  // pangkal pilar mendekati lantai
     destMarker.visible = true;
-    arrow.visible = true;
+    arrowGroup.visible = true;
   }
 
   const adapter = new ThreeAdapter({
@@ -196,9 +222,13 @@ async function main() {
       const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
       const dist = user.distanceTo(flat);
       const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);   // arah pandang (-Z world)
-      arrow.position.copy(user).addScaledVector(fwd, 0.8);
-      const dir = flat.clone().sub(arrow.position); dir.y = 0;
-      if (dir.lengthSq() > 1e-4) arrow.setDirection(dir.normalize());
+      arrowGroup.position.copy(user).addScaledVector(fwd, 0.8);
+      const dir = flat.clone().sub(arrowGroup.position); dir.y = 0;
+      if (dir.lengthSq() > 1e-4) {
+        dir.normalize();
+        const targetPos = arrowGroup.position.clone().add(dir);
+        arrowGroup.lookAt(targetPos);
+      }
       const arrivedLabel = activePoi ? `✓ SAMPAI di ${activePoi.name}` : "✓ SAMPAI di tujuan";
       const navLabel = activePoi ? activePoi.name : "tujuan";
       state.nav = dist < 1.2 ? arrivedLabel : `jarak ${dist.toFixed(1)} m → ikuti panah ke ${navLabel}`;
@@ -241,7 +271,7 @@ async function main() {
       destination = wp.clone();
       destMarker.position.copy(wp);
       destMarker.position.y = wp.y - 0.7;
-      destMarker.visible = true; arrow.visible = true;
+      destMarker.visible = true; arrowGroup.visible = true;
       state.nav = "tujuan(world) diset — menjauh lalu kembali";
       draw();
     });
