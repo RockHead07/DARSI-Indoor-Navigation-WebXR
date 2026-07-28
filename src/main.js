@@ -135,7 +135,8 @@ async function main() {
   catch (e) { return fail(`authorize gagal: ${e.message} (cek CORS domain di dashboard MultiSet)`); }
   draw();
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setClearColor(0x000000, 0); // Background 100% transparan untuk passthrough kamera ARCore
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -399,7 +400,8 @@ async function main() {
 
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: false, // PRODUK: kamera dunia nyata aktif jernih; mesh 3D diagnostik tidak dirender
+    showMesh: false,          // PRODUK: kamera dunia nyata aktif jernih; mesh 3D diagnostik tidak dirender
+    useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
       // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
