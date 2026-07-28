@@ -232,12 +232,145 @@ async function main() {
     destMarker.visible = true; arrowGroup.visible = true;
   }
 
+  // --- NAVGRAPH & A* PATHFINDING ENGINE ---
+  let navGraph = null;
+  let activeWaypointsMap = [];   // Waypoints dalam koordinat MAP
+  let currentWaypointIndex = 0;
+
+  async function loadNavGraph() {
+    try {
+      const res = await fetch("/data/navgraph.json");
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+  loadNavGraph().then((g) => { navGraph = g; });
+
+  function findClosestNode(mapPos, floor) {
+    if (!navGraph || !navGraph.nodes) return null;
+    const candidates = navGraph.nodes.filter((n) => n.floor === floor);
+    if (candidates.length === 0) return null;
+
+    let closest = null;
+    let minSq = Infinity;
+    candidates.forEach((n) => {
+      const dx = n.position.x - mapPos.x;
+      const dy = n.position.y - mapPos.y;
+      const dz = n.position.z - mapPos.z;
+      const sq = dx * dx + dy * dy + dz * dz;
+      if (sq < minSq) {
+        minSq = sq;
+        closest = n;
+      }
+    });
+    return closest;
+  }
+
+  function solveAStar(startNodeId, targetNodeId) {
+    if (!navGraph || !navGraph.nodes || !navGraph.edges) return [];
+
+    const nodesMap = new Map(navGraph.nodes.map((n) => [n.id, n]));
+    if (!nodesMap.has(startNodeId) || !nodesMap.has(targetNodeId)) return [];
+
+    const openSet = [startNodeId];
+    const cameFrom = new Map();
+    const gScore = new Map();
+    const fScore = new Map();
+
+    navGraph.nodes.forEach((n) => {
+      gScore.set(n.id, Infinity);
+      fScore.set(n.id, Infinity);
+    });
+
+    gScore.set(startNodeId, 0);
+    const startNode = nodesMap.get(startNodeId);
+    const targetNode = nodesMap.get(targetNodeId);
+
+    const heuristic = (n1, n2) => {
+      const p1 = n1.position, p2 = n2.position;
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z);
+    };
+
+    fScore.set(startNodeId, heuristic(startNode, targetNode));
+
+    // Adjacency map
+    const adj = new Map();
+    navGraph.edges.forEach((e) => {
+      if (!adj.has(e.from)) adj.set(e.from, []);
+      if (!adj.has(e.to)) adj.set(e.to, []);
+      adj.get(e.from).push({ to: e.to, dist: e.distance });
+      adj.get(e.to).push({ to: e.from, dist: e.distance });
+    });
+
+    while (openSet.length > 0) {
+      openSet.sort((a, b) => (fScore.get(a) ?? Infinity) - (fScore.get(b) ?? Infinity));
+      const current = openSet.shift();
+
+      if (current === targetNodeId) {
+        const path = [current];
+        let curr = current;
+        while (cameFrom.has(curr)) {
+          curr = cameFrom.get(curr);
+          path.unshift(curr);
+        }
+        return path.map((id) => nodesMap.get(id));
+      }
+
+      const neighbors = adj.get(current) || [];
+      neighbors.forEach(({ to, dist }) => {
+        const tentativeG = (gScore.get(current) ?? Infinity) + dist;
+        if (tentativeG < (gScore.get(to) ?? Infinity)) {
+          cameFrom.set(to, current);
+          gScore.set(to, tentativeG);
+          const h = heuristic(nodesMap.get(to), targetNode);
+          fScore.set(to, tentativeG + h);
+          if (!openSet.includes(to)) openSet.push(to);
+        }
+      });
+    }
+
+    return []; // No path found
+  }
+
+  function calculateRouteToPoi(poi, userMapPos) {
+    if (!poi || !navGraph) return;
+    const floor = poi.floor ?? (userMapPos.y >= 1.5 ? 2 : 1);
+    const startNode = findClosestNode(userMapPos, floor);
+    const targetNode = findClosestNode(poi.position, floor);
+
+    if (startNode && targetNode && startNode.id !== targetNode.id) {
+      const nodePath = solveAStar(startNode.id, targetNode.id);
+      if (nodePath.length > 0) {
+        activeWaypointsMap = nodePath.map((n) => new THREE.Vector3(n.position.x, n.position.y, n.position.z));
+        // Tambahkan POI persis di akhir
+        activeWaypointsMap.push(new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z));
+        currentWaypointIndex = 0;
+        return;
+      }
+    }
+    // Fallback: navigasi langsung ke POI jika rute graph tidak ditemukan
+    activeWaypointsMap = [new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z)];
+    currentWaypointIndex = 0;
+  }
+
   // --- POI navigation: transform koordinat map-space POI ke world-space ---
   function anchorPoiDest(poi, worldFromMap) {
-    const mapPos = new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z);
-    destination = mapPos.applyMatrix4(worldFromMap);
-    destMarker.position.copy(destination);
-    destMarker.position.y = destination.y - 0.7;  // pangkal pilar mendekati lantai
+    if (lastMapPos && activeWaypointsMap.length === 0) {
+      calculateRouteToPoi(poi, lastMapPos);
+    }
+    if (activeWaypointsMap.length > 0 && lastWorldFromMap) {
+      const activeWaypointMap = activeWaypointsMap[currentWaypointIndex] || activeWaypointsMap[activeWaypointsMap.length - 1];
+      destination = activeWaypointMap.clone().applyMatrix4(worldFromMap);
+    } else {
+      const mapPos = new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z);
+      destination = mapPos.applyMatrix4(worldFromMap);
+    }
+    // Set penanda pilar di lokasi POI akhir
+    const finalPoiPos = new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z).applyMatrix4(worldFromMap);
+    destMarker.position.copy(finalPoiPos);
+    destMarker.position.y = finalPoiPos.y - 0.7;
     destMarker.visible = true;
     arrowGroup.visible = true;
   }
@@ -251,6 +384,16 @@ async function main() {
       const user = new THREE.Vector3(); camera.getWorldPosition(user);
       const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
       const dist = user.distanceTo(flat);
+
+      // Sekuensial Waypoint Advancement: jika mendekati waypoint aktif (< 1.2m), beralih ke waypoint berikutnya
+      if (activeWaypointsMap.length > 0 && currentWaypointIndex < activeWaypointsMap.length - 1) {
+        if (dist < 1.2 && lastWorldFromMap) {
+          currentWaypointIndex++;
+          const nextWaypointMap = activeWaypointsMap[currentWaypointIndex];
+          destination = nextWaypointMap.clone().applyMatrix4(lastWorldFromMap);
+        }
+      }
+
       const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);   // arah pandang (-Z world)
       arrowGroup.position.copy(user).addScaledVector(fwd, 0.8);
       const dir = flat.clone().sub(arrowGroup.position); dir.y = 0;
@@ -261,7 +404,9 @@ async function main() {
       }
       const arrivedLabel = activePoi ? `✓ SAMPAI di ${activePoi.name}` : "✓ SAMPAI di tujuan";
       const navLabel = activePoi ? activePoi.name : "tujuan";
-      state.nav = dist < 1.2 ? arrivedLabel : `jarak ${dist.toFixed(1)} m → ikuti panah ke ${navLabel}`;
+      state.nav = dist < 1.2 && currentWaypointIndex >= activeWaypointsMap.length - 1 
+        ? arrivedLabel 
+        : `jarak ${dist.toFixed(1)} m → ikuti panah ke ${navLabel}`;
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
@@ -276,8 +421,10 @@ async function main() {
       if (lastOriginWorld) state.drift = `${now.distanceTo(lastOriginWorld).toFixed(2)} m`;
       lastOriginWorld = now;
       lastWorldFromMap = worldFromMap;
-      if (activePoi) anchorPoiDest(activePoi, worldFromMap);  // POI mode: re-anchor tiap localize
-      else if (destMap) anchorDest();                          // Developer mode: re-anchor destMap
+      if (activePoi) {
+        if (lastMapPos) calculateRouteToPoi(activePoi, lastMapPos);
+        anchorPoiDest(activePoi, worldFromMap);  // POI mode: re-anchor & update route tiap localize
+      } else if (destMap) anchorDest();          // Developer mode: re-anchor destMap
       draw();
     },
   });
