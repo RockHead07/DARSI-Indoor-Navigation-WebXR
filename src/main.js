@@ -212,6 +212,33 @@ async function main() {
   navGraphLinesGroup.visible = false;
   scene.add(navGraphLinesGroup);
 
+  // Group animasi panah beranimasi yang berjalan menapak di atas lantai koridor (Floor Chevron Trail)
+  const floorTrailGroup = new THREE.Group();
+  floorTrailGroup.visible = false;
+  floorTrailGroup.renderOrder = 1;              // ter-clip secara realistis oleh Occluder Tembok Gedung VPS
+  scene.add(floorTrailGroup);
+
+  // Geometri panah chevron 3D datar menapak lantai
+  function createChevronGeometry() {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.22);
+    shape.lineTo(0.18, -0.12);
+    shape.lineTo(0.09, -0.12);
+    shape.lineTo(0, 0.04);
+    shape.lineTo(-0.09, -0.12);
+    shape.lineTo(-0.18, -0.12);
+    shape.closePath();
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2); // Rebah menapak di lantai (bidang XZ)
+    return geo;
+  }
+
+  const chevronGeo = createChevronGeometry();
+  const chevronMat = new THREE.MeshBasicMaterial({
+    color: 0x34d399, // Hijau Pastel Mint Vibrant
+    side: THREE.DoubleSide,
+  });
+
   // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
   const arrowGroup = new THREE.Group();
   arrowGroup.visible = false;
@@ -500,6 +527,60 @@ async function main() {
     });
   }
 
+  function updateFloorTrail(worldFromMap, userWorldPos) {
+    while (floorTrailGroup.children.length > 0) {
+      floorTrailGroup.remove(floorTrailGroup.children[0]);
+    }
+    if (!activePoi || activeWaypointsMap.length === 0 || !worldFromMap) {
+      floorTrailGroup.visible = false;
+      return;
+    }
+
+    // Kumpulkan titik-titik lintasan A* di world space
+    const waypointsWorld = [userWorldPos.clone()];
+    for (let i = currentWaypointIndex; i < activeWaypointsMap.length; i++) {
+      waypointsWorld.push(activeWaypointsMap[i].clone().applyMatrix4(worldFromMap));
+    }
+
+    if (waypointsWorld.length < 2) return;
+
+    // Ketinggian lantai dasar (8cm di atas lantai)
+    const floorY = waypointsWorld[waypointsWorld.length - 1].y - 0.7;
+
+    // Jarak interval antar panah (0.5m)
+    const spacing = 0.5;
+    const timeOffset = (performance.now() * 0.001 * 0.7) % spacing;
+
+    for (let i = 0; i < waypointsWorld.length - 1; i++) {
+      const p1 = waypointsWorld[i];
+      const p2 = waypointsWorld[i + 1];
+      const segDir = p2.clone().sub(p1);
+      const segLen = segDir.length();
+      if (segLen < 0.1) continue;
+
+      segDir.normalize();
+      const numChevrons = Math.floor(segLen / spacing);
+
+      for (let j = 0; j <= numChevrons; j++) {
+        const d = j * spacing + timeOffset;
+        if (d > segLen) continue;
+
+        const pos = p1.clone().addScaledVector(segDir, d);
+        pos.y = floorY + 0.08; // Menapak 8cm di atas permukaan lantai
+
+        const chevron = new THREE.Mesh(chevronGeo, chevronMat);
+        chevron.position.copy(pos);
+
+        // Putar chevron mengarah ke segmen jalur berikutnya di lantai
+        const lookTarget = pos.clone().add(segDir);
+        chevron.lookAt(lookTarget);
+        chevron.renderOrder = 1;
+        floorTrailGroup.add(chevron);
+      }
+    }
+    floorTrailGroup.visible = true;
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
     showMesh: true,           // Muat mesh gedung VPS untuk digunakan sebagai Invisible Depth Occluder
@@ -510,6 +591,11 @@ async function main() {
       const user = new THREE.Vector3(); camera.getWorldPosition(user);
       const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
       const dist = user.distanceTo(flat);
+
+      // Update animasi panah berjalan menapak di lantai koridor
+      if (lastWorldFromMap) {
+        updateFloorTrail(lastWorldFromMap, user);
+      }
 
       // Sekuensial Waypoint Advancement: jika mendekati waypoint aktif (< 1.2m), beralih ke waypoint berikutnya
       if (activeWaypointsMap.length > 0 && currentWaypointIndex < activeWaypointsMap.length - 1) {
