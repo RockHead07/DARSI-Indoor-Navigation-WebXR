@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>DARSI WebXR — uji mapCodes</title>
+  <title>DARSI WebXR — Indoor Navigation</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; color: #eee;
-      font: 14px/1.5 system-ui, sans-serif; }
+      font: 14px/1.5 system-ui, -apple-system, sans-serif; }
     /* HUD tetap terlihat saat sesi AR lewat WebXR DOM overlay (overlayRoot = body) */
     #hud { position: fixed; inset: 0 0 auto 0; padding: 12px 14px;
       background: rgba(0,0,0,.6); white-space: pre-wrap; z-index: 10;
@@ -14,10 +14,89 @@
     #hud b { color: #00ff88; }
     .warn { color: #ffb020; }
     .err  { color: #ff5060; }
+
+    /* Bottom Floating Nav Panel */
+    #nav-controls {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 20;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-sizing: border-box;
+    }
+    .panel-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #poi-select {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.9);
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    .btn-action {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      color: #ffffff;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    #btn-start-nav {
+      background: linear-gradient(135deg, #10b981, #059669);
+    }
+    #btn-start-nav:active {
+      transform: scale(0.96);
+    }
+    #btn-stop-nav {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      width: 100%;
+    }
+    #btn-stop-nav:active {
+      transform: scale(0.96);
+    }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div id="hud">DARSI WebXR — memuat…</div>
+
+  <div id="nav-controls">
+    <!-- Panel Standby: Pilihan POI -->
+    <div id="panel-standby" class="panel-row">
+      <select id="poi-select">
+        <option value="">-- Pilih Tujuan POI --</option>
+      </select>
+      <button id="btn-start-nav" class="btn-action">Navigasi 🚀</button>
+    </div>
+
+    <!-- Panel Active: Status & Stop Navigation -->
+    <div id="panel-active" class="panel-row hidden">
+      <button id="btn-stop-nav" class="btn-action">🛑 Hentikan Navigasi</button>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
