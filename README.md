@@ -301,6 +301,8 @@ tak bisa disentuh dari meja, kerja meja diurut **value-per-effort menuju tes lap
 - [ ] **Ukur `geser` map A. Yani** (target sebenarnya; butuh di lokasi)
 - [x] **Sinyal lantai FINAL = `position.Y`** — lt1 Y=−0.5, lt2 Y=3.7 (Δ4.2m); frame mapset, threshold sederhana (ganti mapCodes[0])
 - [x] **Fix setup WebXR & SDK** — hapus `setPixelRatio` (penyebab intrinsics meleset), tetapkan `referenceSpaceType: 'local'` (universal WebXR), sediakan `/draco/` decoders, & urutkan `d.mapCodes` dinamis via `position.Y` agar `ThreeAdapter` memuat GLTF mesh lantai yang tepat (Lt 1 `BCAD` vs Lt 2 `MW`).
+- [x] **Integrasi Panah 3D Kustom (`public/models/arrow.gltf`)** — Model 3D GLTF kustom di-load via `GLTFLoader`, di-scale dinamis (~0.35m), dan terotasi halus ke arah POI tiap frame (`onXRFrame`).
+- [x] **Kamera AR Aktif Jernih (`showMesh: false`)** — Feed kamera asli HP (ARCore) aktif 100% transparan di latar belakang; mesh diagnostik dimatikan sehingga beban render GPU lebih ringan tanpa mengurangi performa VPS.
 - [x] **Protokol scan** — `docs/SCAN-PROTOCOL.md` (§9 #1, dari panduan resmi MultiSet)
 - [ ] **Cek dashboard Jemursari** — `docs/DASHBOARD-CHECK-JEMURSARI.md` (§9 #2, pemilik)
 - [ ] Re-scan Jemursari dgn protokol → uji ulang stabilitas localize (§9 #3)

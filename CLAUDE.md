@@ -18,6 +18,8 @@ app sendiri. Tujuan: buktikan WebXR+VPS bisa menggantikan runtime Unity (UaaL).
 - **Lantai dibaca dari `position.Y`, BUKAN `mapCodes[0]`** (§3 — urutan mapCodes = artefak hint). Untuk `ThreeAdapter` (saat `showMesh: true`), wajib urutkan `d.mapCodes` di `onLocalizationResult` berdasarkan `position.Y` ($Y \ge 1.5\text{m} \rightarrow$ `MAP_MW...` di index 0) agar SDK memuat file mesh GLTF lantai yang benar (bukan memuat mesh Lt 1 di Lt 2).
 - **Dilarang panggil `renderer.setPixelRatio()`** — merusak matriks intrinsics kamera SDK `ThreeAdapter` & membuat pose/mesh offset parah.
 - **Wajib sediakan `/draco/` decoders** di `public/draco/` saat `showMesh: true` agar mesh GLTF Draco tidak gagal muat secara diam-diam.
+- **Gunakan `showMesh: false` untuk produksi AR**: Feed kamera asli HP (ARCore via WebXR) aktif 100% transparan sebagai latar belakang; mesh 3D diagnostik dimatikan sehingga tidak menghalangi tampilan kamera & beban render GPU lebih ringan.
+- **Aset 3D Model wajib di `public/models/`**: Best practice Vite/Three.js untuk aset GLTF/GLB yang di-fetch secara runtime via `GLTFLoader` (misal `/models/arrow.gltf`).
 - **Gunakan `referenceSpaceType: "local"`** pada `XRSessionManager` ('local' dijamin didukung semua HP, 'local-floor' melempar error requestReferenceSpace di banyak HP Android).
 - **Kamera WebXR three.js:** pakai `camera.getWorldPosition()`/`getWorldDirection()`,
   bukan `camera.position` (basi di sesi XR).

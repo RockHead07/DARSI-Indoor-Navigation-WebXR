@@ -213,8 +213,7 @@ async function main() {
 
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: true,  // PRODUK: mesh cuma diagnostik. Uji navigasi kasar tak butuh mesh —
-                      // yang dinilai: apakah PANAH memandu ke ruangan, bukan mesh pas/tidak.
+    showMesh: false, // PRODUK: kamera dunia nyata aktif jernih; mesh 3D diagnostik tidak dirender
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
       // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
