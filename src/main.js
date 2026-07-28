@@ -195,6 +195,11 @@ async function main() {
   destMarker.renderOrder = 1;                    // Render order > 0 agar ter-clip oleh Occlusion Depth Mask
   scene.add(destMarker);
 
+  // Group penanda 3D untuk SEMUA POI (Mode Admin / Overlay Debug)
+  const allPoiMarkersGroup = new THREE.Group();
+  allPoiMarkersGroup.visible = false;
+  scene.add(allPoiMarkersGroup);
+
   // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
   const arrowGroup = new THREE.Group();
   arrowGroup.visible = false;
@@ -212,6 +217,17 @@ async function main() {
       const model = gltf.scene;
       // Koreksi orientasi: putar 180 deg (Math.PI) agar ujung panah pas mengarah ke -Z Three.js
       model.rotation.y = Math.PI;
+
+      // Ubah warna material panah menjadi Hijau Pastel Mint (0x6ee7b7)
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.material = new THREE.MeshStandardMaterial({
+            color: 0x6ee7b7,      // Hijau pastel mint modern
+            roughness: 0.35,
+            metalness: 0.1,
+          });
+        }
+      });
 
       // Auto-center bounding box model ke tengah-tengah pivot
       const box = new THREE.Box3().setFromObject(model);
@@ -418,6 +434,25 @@ async function main() {
     });
   }
 
+  function renderAllPoisOverlay(worldFromMap) {
+    while (allPoiMarkersGroup.children.length > 0) {
+      allPoiMarkersGroup.remove(allPoiMarkersGroup.children[0]);
+    }
+    if (!allPois || allPois.length === 0) return;
+
+    allPois.forEach((p) => {
+      const poiWorldPos = new THREE.Vector3(p.position.x, p.position.y, p.position.z).applyMatrix4(worldFromMap);
+      const poiMarker = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, 1.2, 10),
+        new THREE.MeshBasicMaterial({ color: 0x06b6d4 }) // Cyan cyan modern untuk POI Overlay
+      );
+      poiMarker.position.copy(poiWorldPos);
+      poiMarker.position.y = poiWorldPos.y - 0.5;
+      poiMarker.renderOrder = 1;
+      allPoiMarkersGroup.add(poiMarker);
+    });
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
     showMesh: true,           // Muat mesh gedung VPS untuk digunakan sebagai Invisible Depth Occluder
@@ -443,7 +478,8 @@ async function main() {
       arrowGroup.position.copy(user).addScaledVector(fwd, 0.7);
       arrowGroup.position.y -= 0.15;
 
-      const dir = flat.clone().sub(arrowGroup.position); dir.y = 0;
+      // Full 360° 3D Rotation: Hitung vektor 3D penuh mengarah tepat ke elevasi destination (termasuk pitch Y)
+      const dir = destination.clone().sub(arrowGroup.position);
       if (dir.lengthSq() > 1e-4) {
         dir.normalize();
         const targetPos = arrowGroup.position.clone().add(dir);
@@ -459,6 +495,7 @@ async function main() {
     onLocalizationSuccess: (_result, worldFromMap) => {
       // Terapkan Invisible Depth Mask Material ke mesh gedung VPS yang baru dimuat
       applyOccluderMaterial(scene);
+      renderAllPoisOverlay(worldFromMap);
 
       // Ukur MENTAH, jangan mask. Update gizmo di tempat (tidak menumpuk) dan catat
       // berapa origin bergeser antar-localize = repeatability VPS + drift tracking.
@@ -529,46 +566,54 @@ async function main() {
     };
   }
 
+  const toggleDebugMode = document.getElementById("toggle-debug-mode");
+  const isAdminUrl = location.search.includes("admin=true") || location.search.includes("debug=true");
+  const devButtonsGroup = [];
+
   const mkBtn = (text, bg, fg, bottom, fn) => {
     const b = document.createElement("button");
     b.textContent = text;
     b.style.cssText = `position:fixed;left:16px;bottom:${bottom}px;z-index:20;` +
-      `padding:11px 16px;font:600 14px system-ui;color:${fg};background:${bg};border:0;border-radius:8px;`;
+      `padding:11px 16px;font:600 14px system-ui;color:${fg};background:${bg};border:0;border-radius:8px;display:none;`;
     b.onclick = fn;
     document.body.appendChild(b);
+    devButtonsGroup.push(b);
+    return b;
   };
 
-  // Tombol developer hanya muncul jika bukan POI mode (atau POI tidak ditemukan)
-  if (!poiMode || !activePoi) {
-    // SET TUJUAN — drop-pin world (ARCore, map-independent) — pembanding
-    mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
-      destMap = null;
-      const wp = new THREE.Vector3(); camera.getWorldPosition(wp);
-      destination = wp.clone();
-      destMarker.position.copy(wp);
-      destMarker.position.y = wp.y - 0.7;
-      destMarker.visible = true; arrowGroup.visible = true;
-      state.nav = "tujuan(world) diset — menjauh lalu kembali";
-      draw();
-    });
-
-    // TUJUAN (MAP) — UJI INTI: rekam posisi map-space SEKARANG sbg tujuan
-    mkBtn("TUJUAN (MAP)", "#a855f7", "#fff", 192, () => {
-      if (!lastMapPos) { state.nav = "belum ada localize — arahkan sampai poseFound dulu"; draw(); return; }
-      destMap = lastMapPos.clone();
-      anchorDest();
-      state.nav = "tujuan(MAP) diset — menjauh, cek panah balik ke titik benar?";
-      draw();
-    });
-
-    // RELOCALIZE — picu localize manual
-    mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
-      state.last = "relocalize…"; draw();
-      adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
+  function updateDebugVisibility() {
+    const isDebug = toggleDebugMode ? toggleDebugMode.checked : false;
+    allPoiMarkersGroup.visible = isDebug;
+    devButtonsGroup.forEach((b) => {
+      b.style.display = isDebug ? "block" : "none";
     });
   }
 
-  // REKAM POI — selalu ada (alat pengisian data lapangan)
+  // Tombol-tombol developer & diagnostik
+  mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
+    destMap = null;
+    const wp = new THREE.Vector3(); camera.getWorldPosition(wp);
+    destination = wp.clone();
+    destMarker.position.copy(wp);
+    destMarker.position.y = wp.y - 0.7;
+    destMarker.visible = true; arrowGroup.visible = true;
+    state.nav = "tujuan(world) diset — menjauh lalu kembali";
+    draw();
+  });
+
+  mkBtn("TUJUAN (MAP)", "#a855f7", "#fff", 192, () => {
+    if (!lastMapPos) { state.nav = "belum ada localize — arahkan sampai poseFound dulu"; draw(); return; }
+    destMap = lastMapPos.clone();
+    anchorDest();
+    state.nav = "tujuan(MAP) diset — menjauh, cek panah balik ke titik benar?";
+    draw();
+  });
+
+  mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
+    state.last = "relocalize…"; draw();
+    adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
+  });
+
   mkBtn("REKAM POI 📍", "#f97316", "#fff", 136, () => {
     if (!lastMapPos) {
       state.nav = "Belum ada pose — arahkan kamera ke sekeliling dulu.";
@@ -592,12 +637,18 @@ async function main() {
     draw();
   });
 
-  // SELESAI — akhiri sesi XR lalu balik ke Flutter via intent://
-  mkBtn("SELESAI ✓", "#22c55e", "#fff", (poiMode && activePoi) ? 24 : 248, () => {
+  mkBtn("SELESAI ✓", "#22c55e", "#fff", 248, () => {
     const arrived = state.nav.includes("SAMPAI");
     if (session.isActive()) session.stopSession();
     returnToApp({ arrived: String(arrived) });
   });
+
+  // Hubungkan event listener Slider Switch Mode Admin
+  if (toggleDebugMode) {
+    toggleDebugMode.checked = isAdminUrl;
+    toggleDebugMode.onchange = updateDebugVisibility;
+    updateDebugVisibility();
+  }
 
   draw();
 }
