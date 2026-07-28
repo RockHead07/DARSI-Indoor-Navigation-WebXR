@@ -44,7 +44,7 @@ function draw() {
 }
 const fail = (m) => { hud.innerHTML = `<span class="err">✗ ${m}</span>`; };
 
-// --- POI: load dari pois.json berdasarkan ?poiId= di URL ---
+// --- POI: load dari pois.json ---
 async function loadPoi(poiId) {
   try {
     const res = await fetch("/data/pois.json");
@@ -56,6 +56,17 @@ async function loadPoi(poiId) {
   }
 }
 
+async function loadAllPois() {
+  try {
+    const res = await fetch("/data/pois.json");
+    if (!res.ok) return [];
+    const db = await res.json();
+    return db.pois ?? [];
+  } catch (e) {
+    return [];
+  }
+}
+
 const ID = import.meta.env.VITE_MS_CLIENT_ID;
 const SECRET = import.meta.env.VITE_MS_CLIENT_SECRET;
 if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.local");
@@ -63,6 +74,24 @@ if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.
 async function main() {
   if (!(await ThreeAdapter.isSupported())) {
     return fail("WebXR immersive-ar tidak didukung. Buka di Chrome Android + ARCore.");
+  }
+
+  // --- UI Elements ---
+  const panelStandby = document.getElementById("panel-standby");
+  const panelActive = document.getElementById("panel-active");
+  const poiSelect = document.getElementById("poi-select");
+  const btnStartNav = document.getElementById("btn-start-nav");
+  const btnStopNav = document.getElementById("btn-stop-nav");
+
+  // Populate POI Dropdown
+  const allPois = await loadAllPois();
+  if (allPois.length > 0 && poiSelect) {
+    allPois.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = `[Lt ${p.floor}] ${p.name}`;
+      poiSelect.appendChild(opt);
+    });
   }
 
   // --- deteksi mode POI vs Developer ---
@@ -79,6 +108,8 @@ async function main() {
     } else {
       state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
       draw();
+      panelStandby?.classList.add("hidden");
+      panelActive?.classList.remove("hidden");
     }
   }
 
@@ -251,6 +282,45 @@ async function main() {
     },
   });
   adapter.initialize();               // pasang tombol START AR
+
+  // --- Event Listeners UI Navigasi ---
+  if (btnStartNav && poiSelect) {
+    btnStartNav.onclick = () => {
+      const selectedId = poiSelect.value;
+      if (!selectedId) {
+        state.nav = "Pilih POI tujuan terlebih dahulu!";
+        draw();
+        return;
+      }
+      const target = allPois.find((p) => p.id === selectedId);
+      if (!target) return;
+
+      activePoi = target;
+      state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
+      panelStandby?.classList.add("hidden");
+      panelActive?.classList.remove("hidden");
+
+      if (lastWorldFromMap) {
+        anchorPoiDest(activePoi, lastWorldFromMap);
+      }
+      draw();
+    };
+  }
+
+  if (btnStopNav) {
+    btnStopNav.onclick = () => {
+      activePoi = null;
+      destMap = null;
+      destination = null;
+      destMarker.visible = false;
+      arrowGroup.visible = false;
+
+      state.nav = "Navigasi dihentikan. Pilih tujuan di bawah.";
+      panelActive?.classList.add("hidden");
+      panelStandby?.classList.remove("hidden");
+      draw();
+    };
+  }
 
   const mkBtn = (text, bg, fg, bottom, fn) => {
     const b = document.createElement("button");
