@@ -192,11 +192,13 @@ async function main() {
     new THREE.CylinderGeometry(0.06, 0.06, 1.6, 12),
     new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
   destMarker.visible = false;
+  destMarker.renderOrder = 1;                    // Render order > 0 agar ter-clip oleh Occlusion Depth Mask
   scene.add(destMarker);
 
   // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
   const arrowGroup = new THREE.Group();
   arrowGroup.visible = false;
+  arrowGroup.renderOrder = 1;                   // Render order > 0 agar ter-clip oleh Occlusion Depth Mask
   scene.add(arrowGroup);
 
   const fallbackArrow = new THREE.ArrowHelper(
@@ -398,9 +400,27 @@ async function main() {
     arrowGroup.visible = true;
   }
 
+  function applyOccluderMaterial(rootNode) {
+    rootNode.traverse((child) => {
+      if (child.isMesh && child !== destMarker) {
+        let isNavObject = false;
+        child.traverseAncestors((ancestor) => {
+          if (ancestor === arrowGroup || ancestor === destMarker) isNavObject = true;
+        });
+        if (!isNavObject) {
+          child.material = new THREE.MeshBasicMaterial({
+            colorWrite: false, // Tidak melukis piksel warna (feed kamera HP 100% transparan & jernih)
+            depthWrite: true,  // Tetap melukis z-depth 3D (tembok memblokir objek AR di belakangnya)
+          });
+          child.renderOrder = 0;
+        }
+      }
+    });
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: false,          // PRODUK: kamera dunia nyata aktif jernih; mesh 3D diagnostik tidak dirender
+    showMesh: true,           // Muat mesh gedung VPS untuk digunakan sebagai Invisible Depth Occluder
     useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
@@ -437,6 +457,9 @@ async function main() {
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
+      // Terapkan Invisible Depth Mask Material ke mesh gedung VPS yang baru dimuat
+      applyOccluderMaterial(scene);
+
       // Ukur MENTAH, jangan mask. Update gizmo di tempat (tidak menumpuk) dan catat
       // berapa origin bergeser antar-localize = repeatability VPS + drift tracking.
       const put = (dot, x, y, z) => {
