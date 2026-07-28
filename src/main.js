@@ -207,17 +207,28 @@ async function main() {
     "/models/arrow.gltf",
     (gltf) => {
       const model = gltf.scene;
-      // Normalisasi ukuran model panah (panjang/dimensi maks ~0.35 meter)
+      // Koreksi orientasi: putar 180 deg (Math.PI) agar ujung panah pas mengarah ke -Z Three.js
+      model.rotation.y = Math.PI;
+
+      // Auto-center bounding box model ke tengah-tengah pivot
       const box = new THREE.Box3().setFromObject(model);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      model.position.sub(center);
+
+      const wrapper = new THREE.Group();
+      wrapper.add(model);
+
+      // Normalisasi ukuran model panah (panjang/dimensi maks ~0.35 meter)
       const size = new THREE.Vector3();
       box.getSize(size);
       const maxDim = Math.max(size.x, size.y, size.z);
       if (maxDim > 0) {
         const scale = 0.35 / maxDim;
-        model.scale.set(scale, scale, scale);
+        wrapper.scale.set(scale, scale, scale);
       }
       arrowGroup.remove(fallbackArrow);
-      arrowGroup.add(model);
+      arrowGroup.add(wrapper);
     },
     undefined,
     (err) => console.warn("Gagal memuat 3D model panah /models/arrow.gltf, memakai fallback:", err)
@@ -406,7 +417,10 @@ async function main() {
       }
 
       const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);   // arah pandang (-Z world)
-      arrowGroup.position.copy(user).addScaledVector(fwd, 0.8);
+      // Panah melayang 0.7m di depan pandangan HP & 0.15m di bawah mata untuk efek HUD AR natural
+      arrowGroup.position.copy(user).addScaledVector(fwd, 0.7);
+      arrowGroup.position.y -= 0.15;
+
       const dir = flat.clone().sub(arrowGroup.position); dir.y = 0;
       if (dir.lengthSq() > 1e-4) {
         dir.normalize();
