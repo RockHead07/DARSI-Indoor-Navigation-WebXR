@@ -91,7 +91,50 @@ const ID = import.meta.env.VITE_MS_CLIENT_ID;
 const SECRET = import.meta.env.VITE_MS_CLIENT_SECRET;
 if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.local");
 
+// MODE DIAGNOSTIK MANDIRI (?mapset=true) — menguji akar "mesh meleset".
+// SDK mendeklarasikan endpoint `mapSetDetailsUrl` DAN tipe `IMapSetMapData.relativePose`
+// (pose tiap map di dalam map-set), tapi KEDUANYA tak pernah dipakai: 0 kemunculan di
+// seluruh dist. ThreeAdapter mengunduh mesh map TUNGGAL (vertex di ruang map itu sendiri)
+// lalu menerapkan worldFromMap (ruang MAP-SET) tanpa relativePose → mesh meleset persis
+// sebesar relativePose. Hipotesis: Lt 1 = jangkar (≈identitas, karena itu tampak hampir
+// benar), Lt 2 punya geser nyata (karena itu "yang hancur selalu lantai 2").
+// Sengaja dijalankan SEBELUM gerbang WebXR supaya bisa dibuka di laptop — tak butuh AR.
+async function mapsetDiagnostic() {
+  const client = new MultisetClient({
+    clientId: ID, clientSecret: SECRET, mapType: "map-set", code: MAPSET,
+  });
+  const out = (s) => { hud.innerHTML = `<b>DIAGNOSTIK MAP-SET</b>\n${s}`; console.log(s); };
+  out("mengautentikasi…");
+  try {
+    await client.authorize();
+    const res = await fetch(`https://api.multiset.ai/v1/vps/map-set/${MAPSET}`, {
+      headers: { Authorization: `Bearer ${client.token}` },
+    });
+    const text = await res.text();
+    let body;
+    try { body = JSON.parse(text); } catch { return out(`HTTP ${res.status} — bukan JSON:\n${text.slice(0, 600)}`); }
+
+    const maps = body?.mapSet?.mapSetData ?? body?.mapSetData ?? [];
+    if (!maps.length) {
+      return out(`HTTP ${res.status} — struktur tak dikenal.\nkunci: ${Object.keys(body).join(", ")}\n\n${JSON.stringify(body, null, 2).slice(0, 900)}`);
+    }
+    out(`HTTP ${res.status} — ${maps.length} map\n\n` + maps.map((m) => {
+      const p = m.relativePose?.position ?? {}, q = m.relativePose?.rotation ?? {};
+      const mag = Math.hypot(p.x ?? 0, p.y ?? 0, p.z ?? 0);
+      return `${m.map?.mapCode}  (order ${m.order})\n` +
+             `  ${m.map?.mapName ?? ""}\n` +
+             `  pos: x=${p.x} y=${p.y} z=${p.z}\n` +
+             `  rot: ${q.qx}, ${q.qy}, ${q.qz}, ${q.qw}\n` +
+             `  GESER: ${mag.toFixed(3)} m  ${mag < 0.01 ? "← ~identitas (jangkar map-set)" : "← INI offset mesh yang hilang"}`;
+    }).join("\n\n"));
+  } catch (e) {
+    out(`gagal: ${e?.message ?? e}`);
+  }
+}
+
 async function main() {
+  if (new URLSearchParams(location.search).has("mapset")) return mapsetDiagnostic();
+
   if (!(await ThreeAdapter.isSupported())) {
     return fail("WebXR immersive-ar tidak didukung. Buka di Chrome Android + ARCore.");
   }
@@ -154,36 +197,6 @@ async function main() {
   try { await client.authorize(); state.auth = "OK"; }
   catch (e) { return fail(`authorize gagal: ${e.message} (cek CORS domain di dashboard MultiSet)`); }
   draw();
-
-  // DIAGNOSTIK SEMENTARA (?mapset=true) — menguji akar "mesh meleset".
-  // SDK mendeklarasikan endpoint `mapSetDetailsUrl` DAN tipe `IMapSetMapData.relativePose`
-  // (pose tiap map di dalam map-set), tapi KEDUANYA tak pernah dipakai: 0 kemunculan di
-  // seluruh dist. ThreeAdapter mengunduh mesh map TUNGGAL (vertex di ruang map itu sendiri)
-  // lalu menerapkan worldFromMap (ruang MAP-SET) tanpa relativePose → mesh meleset persis
-  // sebesar relativePose. Hipotesis: Lt 1 = jangkar (≈identitas, tampak hampir benar),
-  // Lt 2 punya geser nyata (karena itu "yang hancur selalu lantai 2").
-  // Dijalankan dari app karena kredensial hanya hidup di sini; `client.token` getter publik.
-  if (new URLSearchParams(location.search).has("mapset")) {
-    try {
-      const res = await fetch(`https://api.multiset.ai/v1/vps/map-set/${MAPSET}`, {
-        headers: { Authorization: `Bearer ${client.token}` },
-      });
-      const body = await res.json();
-      const maps = body?.mapSet?.mapSetData ?? body?.mapSetData ?? [];
-      state.nav = `mapset HTTP ${res.status}\n` + (maps.length
-        ? maps.map((m) => {
-            const p = m.relativePose?.position ?? {}, q = m.relativePose?.rotation ?? {};
-            const mag = Math.hypot(p.x ?? 0, p.y ?? 0, p.z ?? 0);
-            return `${m.map?.mapCode} (order ${m.order})\n` +
-                   `  pos ${p.x}, ${p.y}, ${p.z}  → geser ${mag.toFixed(2)} m\n` +
-                   `  rot ${q.qx}, ${q.qy}, ${q.qz}, ${q.qw}`;
-          }).join("\n")
-        : JSON.stringify(body).slice(0, 500));
-    } catch (e) {
-      state.nav = `mapset gagal: ${e?.message ?? e}`;
-    }
-    draw();
-  }
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0); // Background 100% transparan untuk passthrough kamera ARCore
