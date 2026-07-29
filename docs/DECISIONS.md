@@ -67,7 +67,11 @@ Menetapkan `showMesh: false` untuk penggunaan produksi AR. Feed kamera asli pera
 
 ---
 
-## ADR-W004 — Model 3D panah kustom via GLTFLoader (2026-07-28)
+## ADR-W004 — Model 3D panah kustom via GLTFLoader (2026-07-28) — ❌ DICABUT
+
+> **Dicabut oleh ADR-W008 (2026-07-29).** Panah 3D HUD dihapus seluruhnya; penunjuk arah
+> tunggal kini chevron di lantai. Isi di bawah disimpan sebagai catatan sejarah.
+
 
 ### Konteks
 Penunjuk arah awal menggunakan `THREE.ArrowHelper` bawaan three.js (berupa garis dan kerucut sederhana).
@@ -200,6 +204,54 @@ satu-satunya jalur masuk navigasi POI (dipakai `onLocalizationSuccess` **dan** t
 - `calculateRouteToPoi` kini memfilter start pakai lantai user dan target pakai lantai POI
   — semantiknya benar dan siap untuk multi-lantai, walau saat ini keduanya selalu sama.
 - Utang yang tercatat: `docs/KNOWN-ISSUES.md` → "Rute lintas-lantai belum ada".
+
+---
+
+## ADR-W008 — Chevron lantai sebagai penunjuk arah TUNGGAL (2026-07-29)
+
+**Mencabut ADR-W004.**
+
+### Konteks
+Sesudah Animated Floor Arrow Trail selesai (2026-07-28), repo punya **dua** sistem penunjuk
+arah yang berjalan bersamaan:
+
+| Sistem | Menjawab | Terikat pada |
+|---|---|---|
+| `arrowGroup` — panah 3D GLTF melayang 0.7 m di depan kamera | arah *sekarang* (kompas) | garis lurus ke tujuan |
+| `floorTrailGroup` — chevron beranimasi menapak lantai | *rute* ("lewat sini, belok di sana") | jalur A* |
+
+Dengan `navgraph.json` yang masih 3 node, rute A* nyaris garis lurus — sehingga keduanya
+praktis menampilkan informasi yang sama, dengan dua kali permukaan untuk salah.
+
+### Keputusan
+Chevron lantai menjadi penunjuk arah **tunggal**. Panah 3D HUD dihapus seluruhnya:
+`arrowGroup`, fallback `THREE.ArrowHelper`, `GLTFLoader` di `main.js`, dan aset
+`public/models/arrow.{gltf,bin}`.
+
+### Alasan
+1. Chevron lantai adalah pola produk navigasi indoor sungguhan (Google Live View, app
+   bandara) — orang mengikuti jalur yang "dicat" di lantai secara alami. Ia menyampaikan
+   **rute**, bukan sekadar bearing.
+2. Chevron menghormati koridor karena bersumber dari A*. Panah HUD selalu menunjuk garis
+   lurus ke tujuan → menembus tembok begitu POI ada di koridor lain.
+3. Panah HUD berotasi 3D penuh **termasuk pitch** — ia mendongak/menunduk mengikuti elevasi
+   POI. Untuk orang yang sedang berjalan itu bukan informasi, itu gangguan.
+
+### Konsekuensi
+- `main.js` −261 baris; satu dependensi jaringan saat runtime (unduh `.gltf`) hilang.
+- **Bundle hampir tak berubah** (657.5 → 655.5 kB): `GLTFLoader` tetap ikut karena SDK
+  MultiSet mengimpornya untuk mesh. Ini bukan penghematan ukuran, melainkan penyederhanaan.
+- Lampu scene (`AmbientLight`/`DirectionalLight`) ikut dihapus — dipasang khusus untuk panah,
+  padahal semua material lain `MeshBasicMaterial` (unlit) dan mesh SDK punya `ShaderMaterial`
+  sendiri. Tidak ada perubahan visual.
+- **Chevron gagal lebih keras.** Ia map-anchored ujung ke ujung: kalau anchoring meleset
+  1–2 m, chevron terlihat jelas menembus tembok. Panah HUD posisinya camera-relative jadi
+  selalu tampak, dan kesalahan beberapa derajat hampir tak terasa. Selama akurasi anchoring
+  belum terbukti, tampilan akan terasa lebih rusak — walau keduanya sama-sama salah.
+- **Nilai penuh menunggu navgraph.** Dengan 3 node, chevron belum menunjukkan rute sungguhan.
+- **Risiko ergonomis:** HP dipegang setinggi dada menghadap lurus → lantai bisa di luar frame.
+  Kalau terbukti di lapangan, solusinya **menaikkan chevron terdekat**, BUKAN mengembalikan
+  penunjuk yang terkunci ke kamera (itu mengulang masalah yang baru saja dihapus).
 
 ---
 

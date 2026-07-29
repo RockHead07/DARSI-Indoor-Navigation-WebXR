@@ -45,9 +45,15 @@ Tentukan jaringan titik koridor (*waypoints/nodes*) dan koneksi antar-titik (*ed
 
 ### 3. AR Floor Visualizer & Turn-by-Turn Guidance
 
-- **Floor Ribbon / Path Line**: Merender pita panah / titik-titik AR di lantai mengikuti urutan segment rute.
-- **Waypoint Arrow**: Panah petunjuk AR melayang selalu mengarah ke **node persimpangan berikutnya**, bukan langsung menembus dinding ke ruangan target.
-- **HUD Instructions**: Tampilkan teks instruksi kontekstual di HUD (mis. *"Lurus 15m, lalu belok kanan ke Poli Anak"*).
+- ✅ **Floor Chevron Trail** (`floorTrailGroup`): chevron AR menapak lantai tiap 0.5 m mengikuti
+  urutan segment rute, dengan animasi berjalan maju. **Ini penunjuk arah tunggal** — panah HUD
+  melayang sudah dihapus (ADR-W008), karena chevron sudah mengarah ke node persimpangan
+  berikutnya lewat A* dan tidak menembus dinding.
+- ⬜ **HUD Instructions**: teks instruksi kontekstual di HUD (mis. *"Lurus 15m, lalu belok kanan
+  ke Poli Anak"*). Belum ada.
+- ⬜ **Navgraph memadai**: `navgraph.json` masih 3 node / 2 edge di Lantai 2 saja. Sampai node
+  koridor Lantai 1 + tangga/lift direkam, rute A* nyaris garis lurus dan chevron belum
+  menunjukkan nilai penuhnya. **Ini prasyarat terbesar yang tersisa di roadmap ini.**
 
 ---
 

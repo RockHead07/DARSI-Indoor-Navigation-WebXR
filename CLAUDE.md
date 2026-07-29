@@ -20,9 +20,15 @@ app sendiri. Tujuan: buktikan WebXR+VPS bisa menggantikan runtime Unity (UaaL).
   Untuk `ThreeAdapter` (saat `showMesh: true`), urutkan `d.mapCodes` di
   `onLocalizationResult` berdasarkan `position.Y`.
 - **Dilarang panggil `renderer.setPixelRatio()`** — merusak matriks intrinsics kamera.
+- **Offset vertikal objek ≠ tinggi mata.** `CylinderGeometry` three.js ber-origin di TENGAH.
+  Pilar penanda memakai helper `pillarGeo()` yang sudah menggeser origin ke alas — pakai itu,
+  jangan menghitung setengah tinggi manual. Pernah bikin regresi: `−0.7`/`−0.5` disangka magic
+  number tak konsisten lalu diseragamkan jadi `−EYE_HEIGHT`, akibatnya semua pilar tenggelam
+  separuh ke lantai dan sempat ter-deploy ke produksi.
+- **Satu penunjuk arah saja: chevron lantai** (ADR-W008). Jangan menambah panah/indikator
+  yang terkunci ke kamera — itu persis yang baru dihapus.
 - **Wajib sediakan `/draco/` decoders** di `public/draco/` saat `showMesh: true`.
 - **Gunakan `showMesh: false` untuk produksi AR** (`docs/DECISIONS.md` ADR-W003).
-- **Aset 3D Model wajib di `public/models/`** (`docs/ARCHITECTURE.md`).
 - **Gunakan `referenceSpaceType: "local"`** pada `XRSessionManager`.
 - **Kamera WebXR three.js:** pakai `camera.getWorldPosition()`/`getWorldDirection()`,
   bukan `camera.position` (basi di sesi XR).

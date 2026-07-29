@@ -13,16 +13,17 @@
 import * as THREE from "three";
 import { MultisetClient, XRSessionManager } from "@multisetai/vps/core";
 import { ThreeAdapter } from "@multisetai/vps/three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
 
 // Tinggi HP dari lantai saat dipegang jalan. Semua koordinat map direkam pada ketinggian
 // ini (localize memakai pose kamera), jadi lantai = worldY objek − EYE_HEIGHT.
-// ponytail: ini knob kalibrasi lapangan, bukan konstanta fisika — setel kalau chevron
-// tampak tenggelam/melayang.
-const EYE_HEIGHT = 1.4;
+// Nilai 1.5 diturunkan dari penempatan lama yang terbukti benar di lapangan: pilar 1.6 m
+// dipasang di poiY−0.7 dengan origin di tengah → alasnya jatuh di poiY−1.5.
+// ponytail: knob kalibrasi lapangan, bukan konstanta fisika — setel kalau pilar/chevron
+// tampak tenggelam atau melayang.
+const EYE_HEIGHT = 1.5;
 
 // Jeda sebelum localize pertama, memberi ARCore waktu mengunci feature point (ADR-W005).
 const ARCORE_WARMUP_MS = 1500;
@@ -161,12 +162,8 @@ async function main() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 1000);
 
-  // Pencahayaan Scene 3D
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
-  scene.add(ambientLight);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(1, 2, 3);
-  scene.add(dirLight);
+  // Tanpa lampu: semua material di scene ini MeshBasicMaterial (unlit), dan mesh SDK
+  // memakai ShaderMaterial-nya sendiri. Menambah lampu tidak mengubah apa pun.
 
   let lastMapPos = null;   // posisi map-space localize terakhir (untuk merekam tujuan MAP)
 
@@ -226,13 +223,26 @@ async function main() {
     onError: (e) => { state.last = `error: ${e?.message ?? e}`; draw(); },
   });
 
+  // Pilar penanda. CylinderGeometry ber-origin di TENGAH, jadi origin-nya digeser ke ALAS
+  // sekali di sini. Sesudah itu semua penempatan cukup menaruh alas di lantai
+  // (worldY − EYE_HEIGHT) tanpa perlu ingat setengah tinggi masing-masing.
+  const pillarGeo = (radius, height, seg) => {
+    const g = new THREE.CylinderGeometry(radius, radius, height, seg);
+    g.translate(0, height / 2, 0);
+    return g;
+  };
+
   // --- objek navigasi (world space) ---
   let destination = null;                        // THREE.Vector3 world, atau null
   const destMarker = new THREE.Mesh(             // pilar kuning di titik tujuan
-    new THREE.CylinderGeometry(0.06, 0.06, 1.6, 12),
+    pillarGeo(0.06, 1.6, 12),
     new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
   destMarker.visible = false;
   scene.add(destMarker);
+
+  // Geometri & material overlay POI dibuat SEKALI — renderAllPoisOverlay dipanggil tiap localize.
+  const poiPillarGeo = pillarGeo(0.04, 1.2, 10);
+  const poiPillarMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
 
   // Group penanda 3D untuk SEMUA POI (Mode Admin / Overlay Debug)
   const allPoiMarkersGroup = new THREE.Group();
@@ -270,56 +280,6 @@ async function main() {
     side: THREE.DoubleSide,
   });
 
-  // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
-  const arrowGroup = new THREE.Group();
-  arrowGroup.visible = false;
-  scene.add(arrowGroup);
-
-  const fallbackArrow = new THREE.ArrowHelper(
-    new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 0.4, 0x00ff88, 0.15, 0.09);
-  arrowGroup.add(fallbackArrow);
-
-  const gltfLoader = new GLTFLoader();
-  gltfLoader.load(
-    "/models/arrow.gltf",
-    (gltf) => {
-      const model = gltf.scene;
-      // Koreksi orientasi: putar 180 deg (Math.PI) agar ujung panah pas mengarah ke -Z Three.js
-      model.rotation.y = Math.PI;
-
-      // Ubah warna material panah menjadi Hijau Pastel Mint Vibrant (0x34d399 / MeshBasicMaterial)
-      model.traverse((child) => {
-        if (child.isMesh) {
-          child.material = new THREE.MeshBasicMaterial({
-            color: 0x34d399,      // Hijau pastel mint vibrant yang selalu menyala jernih
-          });
-        }
-      });
-
-      // Auto-center bounding box model ke tengah-tengah pivot
-      const box = new THREE.Box3().setFromObject(model);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      model.position.sub(center);
-
-      const wrapper = new THREE.Group();
-      wrapper.add(model);
-
-      // Normalisasi ukuran model panah (panjang/dimensi maks ~0.35 meter)
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const maxDim = Math.max(size.x, size.y, size.z);
-      if (maxDim > 0) {
-        const scale = 0.35 / maxDim;
-        wrapper.scale.set(scale, scale, scale);
-      }
-      arrowGroup.remove(fallbackArrow);
-      arrowGroup.add(wrapper);
-    },
-    undefined,
-    (err) => console.warn("Gagal memuat 3D model panah /models/arrow.gltf, memakai fallback:", err)
-  );
-
   // gizmo koordinat map — DIBUAT SEKALI, di-update tiap localize (jangan menumpuk).
   const mkDot = (c) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.08),
@@ -337,7 +297,7 @@ async function main() {
     destination = destMap.clone().applyMatrix4(lastWorldFromMap);
     destMarker.position.copy(destination);
     destMarker.position.y = destination.y - EYE_HEIGHT;
-    destMarker.visible = true; arrowGroup.visible = true;
+    destMarker.visible = true;
   }
 
   // --- NAVGRAPH & A* PATHFINDING ENGINE ---
@@ -476,7 +436,7 @@ async function main() {
     // yang menembus lantai. Begitu user sampai, localize berikutnya membaca Y dan rute jalan.
     if (lastMapPos && floorOf(lastMapPos.y) !== poiFloor) {
       activeWaypointsMap = []; currentWaypointIndex = 0; destination = null;
-      destMarker.visible = false; arrowGroup.visible = false; floorTrailGroup.visible = false;
+      destMarker.visible = false; floorTrailGroup.visible = false;
       const arah = poiFloor > floorOf(lastMapPos.y) ? "Naik" : "Turun";
       state.nav = `${arah} ke Lantai ${poiFloor} dulu — ${activePoi.name} ada di sana. ` +
                   `Navigasi aktif otomatis setelah sampai.`;
@@ -501,7 +461,6 @@ async function main() {
     destMarker.position.copy(finalPoiPos);
     destMarker.position.y = finalPoiPos.y - EYE_HEIGHT;   // POI direkam pada tinggi mata → turunkan ke lantainya
     destMarker.visible = true;
-    arrowGroup.visible = true;
   }
 
   function renderAllPoisOverlay(worldFromMap) {
@@ -512,12 +471,9 @@ async function main() {
 
     allPois.forEach((p) => {
       const poiWorldPos = new THREE.Vector3(p.position.x, p.position.y, p.position.z).applyMatrix4(worldFromMap);
-      const poiMarker = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, 1.2, 10),
-        new THREE.MeshBasicMaterial({ color: 0x06b6d4 }) // Cyan cyan modern untuk POI Overlay
-      );
+      const poiMarker = new THREE.Mesh(poiPillarGeo, poiPillarMat);
       poiMarker.position.copy(poiWorldPos);
-      poiMarker.position.y = poiWorldPos.y - EYE_HEIGHT;   // tiap POI duduk di lantainya sendiri
+      poiMarker.position.y = poiWorldPos.y - EYE_HEIGHT;   // alas pilar berdiri di lantai POI-nya
       allPoiMarkersGroup.add(poiMarker);
     });
   }
@@ -638,23 +594,11 @@ async function main() {
         }
       }
 
-      const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);   // arah pandang (-Z world)
-      // Panah melayang 0.7m di depan pandangan HP & 0.15m di bawah mata untuk efek HUD AR natural
-      arrowGroup.position.copy(user).addScaledVector(fwd, 0.7);
-      arrowGroup.position.y -= 0.15;
-
-      // Full 360° 3D Rotation: Hitung vektor 3D penuh mengarah tepat ke elevasi destination (termasuk pitch Y)
-      const dir = destination.clone().sub(arrowGroup.position);
-      if (dir.lengthSq() > 1e-4) {
-        dir.normalize();
-        const targetPos = arrowGroup.position.clone().add(dir);
-        arrowGroup.lookAt(targetPos);
-      }
       const arrivedLabel = activePoi ? `✓ SAMPAI di ${activePoi.name}` : "✓ SAMPAI di tujuan";
       const navLabel = activePoi ? activePoi.name : "tujuan";
-      state.nav = dist < 1.2 && currentWaypointIndex >= activeWaypointsMap.length - 1 
-        ? arrivedLabel 
-        : `jarak ${dist.toFixed(1)} m → ikuti panah ke ${navLabel}`;
+      state.nav = dist < 1.2 && currentWaypointIndex >= activeWaypointsMap.length - 1
+        ? arrivedLabel
+        : `jarak ${dist.toFixed(1)} m → ikuti jalur di lantai ke ${navLabel}`;
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
@@ -712,7 +656,7 @@ async function main() {
       destMap = null;
       destination = null;
       destMarker.visible = false;
-      arrowGroup.visible = false;
+      floorTrailGroup.visible = false;
 
       state.nav = "Navigasi dihentikan. Pilih tujuan di bawah.";
       panelActive?.classList.add("hidden");
@@ -757,7 +701,7 @@ async function main() {
     destination = wp.clone();
     destMarker.position.copy(wp);
     destMarker.position.y = wp.y - EYE_HEIGHT;
-    destMarker.visible = true; arrowGroup.visible = true;
+    destMarker.visible = true;
     state.nav = "tujuan(world) diset — menjauh lalu kembali";
     draw();
   });

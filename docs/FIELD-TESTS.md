@@ -83,5 +83,7 @@ mesh tetap melayang/tidak pas koridor nyata.
 - Lantai 2 terkonfirmasi valid (Y ≈ 3.81m).
 - Koordinat POI direkam: `x=-1.56, y=3.81, z=39.58`.
 - Model 3D panah kustom (`arrow.gltf`) berfungsi melayang dan mengarah ke POI.
+  *(Catatan 2026-07-29: panah ini kemudian dihapus — ADR-W008. Hasil uji di atas tetap
+  dicatat apa adanya sebagai rekaman sejarah.)*
 - `showMesh: false` → kamera HP aktif 100% transparan, performa AR ringan.
 - Mesh offset diklasifikasi sebagai bug visual diagnostik, bukan masalah navigasi.

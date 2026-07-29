@@ -46,7 +46,7 @@ Tabel berikut merangkum teknologi dan pustaka yang digunakan dalam repositori We
 |---|---|---|
 | **AR Runtime** | WebXR `immersive-ar` | Tracking pergerakan dunia nyata berbasis ARCore di Chrome Android. |
 | **VPS (Visual Positioning System)** | `@multisetai/vps` v2.3.1 | Pustaka `MultisetClient` dan `ThreeAdapter` untuk lokalisasi visual berbasis gambar kamera. |
-| **Render Engine** | three.js (≥ 0.169.0) | Rendering grafik 3D Web (pilar penanda, panah 3D GLTF, dan scene WebXR). |
+| **Render Engine** | three.js (≥ 0.169.0) | Rendering grafik 3D Web (pilar penanda, chevron lantai, dan scene WebXR). |
 | **Pathfinding** | A* (Direncanakan) | Algoritma A* sederhana (~40 baris) di atas graf `waypoints[].connectedWaypoints`. |
 | **Build Tool** | Vite v5.4.0 | Bundler dan dev server modern untuk aplikasi web ESM. |
 | **Hosting & Deployment** | Vercel | Hosting dengan dukungan HTTPS bawaan dan otomatisasi deployment dari Git. |
@@ -91,10 +91,8 @@ DARSI-Indoor-Navigation-WebXR/
 ├── public/                 # Asset statis yang disajikan langsung oleh web server
 │   ├── data/
 │   │   └── pois.json       # Basis data POI (Point of Interest)
-│   ├── draco/              # Draco 3D mesh decoders
-│   └── models/
-│       ├── arrow.bin       # Data biner geometry panah 3D
-│       └── arrow.gltf      # Model 3D GLTF panah navigasi
+│   │   └── navgraph.json   # Node koridor + edges untuk A* pathfinding
+│   └── draco/              # Draco 3D mesh decoders (hanya dipakai saat ?mesh=true)
 ├── src/
 │   └── main.js             # Kode utama aplikasi (entry point spike WebXR)
 ├── tools/
@@ -122,18 +120,30 @@ Aplikasi dikelola secara terpusat pada berkas `src/main.js` yang terbagi ke dala
 
 ### 6.2. AR Session (`XRSessionManager`)
 - Mengelola siklus hidup sesi WebXR `immersive-ar`.
-- Menyiapkan konfigurasi sesi: `referenceSpaceType: 'local'`, `autoLocalize: true`, `relocalization: true`, `backgroundLocalization: true` (setiap 10 detik), dan `confidenceThreshold: 0.6`.
+- Menyiapkan konfigurasi sesi: `referenceSpaceType: 'local'`, **`autoLocalize: false`**, `relocalization: true`, `backgroundLocalization: true` (setiap 10 detik), dan `confidenceCheck: true` (threshold jatuh ke default SDK 0.5).
+- **Lokalisasi pertama dipicu manual** setelah `ARCORE_WARMUP_MS` (1.5 dtk) di `onSessionStart`. `autoLocalize` bawaan SDK menembak di rAF berikutnya persis — saat tracking ARCore masih dingin, yang meracuni `worldFromMap` sejak lahir (ADR-W005).
 - Menyediakan handler event `onSessionStart`, `onSessionEnd`, `onCameraIntrinsics`, `onLocalizationResult`, `onLocalizationFailure`, dan `onError`.
 
 ### 6.3. Localization & Floor Detection
 - Menerima respons VPS melalui callback `onLocalizationResult`.
 - **Deteksi Lantai berbasis `position.Y`:** Berdasarkan temuan pengujian lapangan (2026-07-22), elevasi `Y` pada koordinat mapset VPS bersifat absolut dan kokoh (`Y < 1.5m` = Lantai 1 `MAP_BCADVLIXFSJE`, `Y >= 1.5m` = Lantai 2 `MAP_MW1QTZWG1TLG`).
-- Secara dinamis mengurutkan array `d.mapCodes` berdasarkan nilai `position.Y` sebelum diteruskan ke `ThreeAdapter` agar mesh GLTF lantai yang tepat dimuat secara akurat.
+- Secara dinamis mengurutkan array `d.mapCodes` berdasarkan nilai `position.Y` agar `ThreeAdapter` memuat mesh lantai yang tepat. **Hanya aktif saat `?mesh=true`** — di mode produksi mesh tidak dimuat, sehingga pengurutan ini tak diperlukan (ADR-W006).
 
-### 6.4. Navigation & 3D Arrow
-- **Destinasi Visual (`destMarker`):** Pilar silinder kuning (`THREE.CylinderGeometry`) diatur berdiri di lokasi koordinat tujuan dunia nyata.
-- **Panah Navigasi 3D (`arrowGroup`):** Memuat model 3D kustom `/models/arrow.gltf` menggunakan `GLTFLoader` dengan fallback `THREE.ArrowHelper` jika model gagal dimuat.
-- **Loop Frame (`onXRFrame`):** Pada setiap frame AR, posisi kamera diambil (`camera.getWorldPosition`), lalu panah ditempatkan ~0.8m di depan pengguna dan diputar secara halus (`lookAt`) menghadap ke koordinat tujuan. Kalkulasi jarak mengabaikan beda tinggi (horizontal distance), dan saat jarak `< 1.2m`, HUD menampilkan status `"SAMPAI"`.
+### 6.4. Navigation & Floor Chevron Trail
+Penunjuk arah **tunggal** adalah chevron menapak lantai (ADR-W008). Panah 3D HUD sudah dihapus.
+
+- **Destinasi Visual (`destMarker`):** Pilar silinder kuning berdiri di koordinat tujuan.
+  Geometri silinder ber-origin di **tengah**, jadi origin-nya digeser ke **alas** sekali
+  lewat helper `pillarGeo()` — sesudah itu semua penempatan cukup menaruh alas di lantai
+  (`worldY − EYE_HEIGHT`) tanpa perlu mengingat setengah tinggi masing-masing pilar.
+- **Chevron Trail (`floorTrailGroup`):** `THREE.ShapeGeometry` datar (di-`rotateX(-π/2)` agar
+  rebah di bidang XZ) disebar tiap 0.5 m di sepanjang waypoint A*, 8 cm di atas lantai, dengan
+  offset animasi berbasis `performance.now()` sehingga tampak berjalan maju.
+- **Tinggi lantai:** diturunkan dari posisi **user** (`userWorldPos.y − EYE_HEIGHT`), bukan
+  dari tujuan — user selalu berdiri di lantainya sendiri.
+- **Loop Frame (`onXRFrame`):** posisi kamera diambil via `camera.getWorldPosition()`, trail
+  diperbarui, dan waypoint aktif maju saat jarak `< 1.2 m`. Kalkulasi jarak mengabaikan beda
+  tinggi (horizontal distance); saat waypoint terakhir tercapai HUD menampilkan `"SAMPAI"`.
 
 ### 6.5. POI (Point of Interest)
 - Memeriksa URL query string `?poiId=`. Jika ada, sistem membaca berkas `/data/pois.json` melalui `loadPoi(poiId)`.

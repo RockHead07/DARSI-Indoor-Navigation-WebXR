@@ -36,7 +36,7 @@ dari client (sejalan ADR-021).
 ## Occlusion: Objek AR Terlihat Menembus Tembok Fisik
 
 **Status:** DITUNDA — pernah diimplementasi 2026-07-28, **dicabut ADR-W006** (2026-07-29)  
-**Dampak:** Pilar penanda POI dan panah 3D terlihat di balik tembok fisik (tidak
+**Dampak:** Pilar penanda POI dan chevron lantai terlihat di balik tembok fisik (tidak
 ter-occlude oleh geometri dunia nyata).
 
 **Penyebab:** Kamera HP biasa tidak memiliki sensor depth/LiDAR. GPU WebGL
@@ -50,6 +50,21 @@ menjaring seluruh scene). Rinciannya di `docs/DECISIONS.md` ADR-W006.
 **Prasyarat menghidupkan kembali:** mesh terbukti sejajar dengan koridor nyata.
 Setelah itu wajib ikut: pemasangan material **setelah** mesh masuk scene (bukan di
 `onLocalizationSuccess`), dan scope dibatasi ke `meshGroup` SDK saja.
+
+---
+
+## Chevron Lantai Bisa di Luar Frame Kamera
+
+**Status:** RISIKO BELUM TERUJI (ADR-W008)  
+**Dampak:** Penunjuk arah kini hanya chevron di lantai. Kalau HP dipegang setinggi dada
+menghadap lurus ke depan, lantai bisa berada di luar frame → pengguna tak melihat panduan.
+
+**Penanganan kalau terbukti di lapangan:** naikkan chevron terdekat (mis. beberapa chevron
+pertama diangkat bertahap ke garis pandang), **BUKAN** mengembalikan penunjuk yang terkunci
+ke kamera — itu mengulang redundansi yang baru saja dihapus.
+
+**Cara menguji:** Uji 4 di Jemursari, jalan normal sambil memegang HP seperti biasa (jangan
+sengaja menunduk). Catat apakah chevron terlihat tanpa harus mengarahkan kamera ke bawah.
 
 ---
 
