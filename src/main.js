@@ -337,6 +337,18 @@ async function main() {
 
   const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
+  // Posisi user SEKARANG dalam koordinat map. WAJIB pakai ini untuk merekam, bukan
+  // `lastMapPos` — lastMapPos hanya diperbarui saat lokalisasi (~10 dtk), jadi kalau
+  // direkam sambil berjalan hasilnya posisi belasan meter di belakang. ARCore melacak
+  // terus-menerus, jadi posisi kamera live + kebalikan worldFromMap = posisi map live.
+  const _mapFromWorld = new THREE.Matrix4();
+  function currentMapPos() {
+    if (!lastWorldFromMap) return null;
+    const w = new THREE.Vector3();
+    camera.getWorldPosition(w);
+    return w.applyMatrix4(_mapFromWorld.copy(lastWorldFromMap).invert());
+  }
+
   async function loadNavGraph() {
     try {
       const res = await fetch("/data/navgraph.json");
@@ -768,22 +780,21 @@ async function main() {
   });
 
   mkBtn("REKAM POI 📍", "#f97316", "#fff", 136, () => {
-    if (!lastMapPos) {
-      state.nav = "Belum ada pose — arahkan kamera ke sekeliling dulu.";
+    const here = currentMapPos();   // posisi LIVE — lastMapPos basi hingga ~10 dtk
+    if (!here) {
+      state.nav = "Belum ada localize — arahkan kamera ke sekeliling dulu.";
       draw(); return;
     }
-    const isFloor2 = lastMapPos.y >= 1.5;
-    const floor = isFloor2 ? 2 : 1;
     const mapCode = [...state.seen][0] ?? "MAP_???";
     const snippet = JSON.stringify({
       id: "",
       name: "",
-      floor,
+      floor: floorOf(here.y),
       mapCode,
       position: {
-        x: parseFloat(lastMapPos.x.toFixed(2)),
-        y: parseFloat(lastMapPos.y.toFixed(2)),
-        z: parseFloat(lastMapPos.z.toFixed(2)),
+        x: parseFloat(here.x.toFixed(2)),
+        y: parseFloat(here.y.toFixed(2)),
+        z: parseFloat(here.z.toFixed(2)),
       },
     }, null, 2);
     state.nav = `📍 REKAM POI (copy ke pois.json):\n${snippet}`;
@@ -801,11 +812,12 @@ async function main() {
   const SNAP_M = 1.5;
 
   mkBtn("REKAM NODE ⛓️", "#14b8a6", "#fff", 304, () => {
-    if (!lastMapPos) { state.nav = "Belum ada pose — arahkan kamera ke sekeliling dulu."; draw(); return; }
+    const here = currentMapPos();   // posisi LIVE, bukan lastMapPos yang basi ~10 dtk
+    if (!here) { state.nav = "Belum ada localize — arahkan kamera ke sekeliling dulu."; draw(); return; }
     const p = {
-      x: parseFloat(lastMapPos.x.toFixed(2)),
-      y: parseFloat(lastMapPos.y.toFixed(2)),
-      z: parseFloat(lastMapPos.z.toFixed(2)),
+      x: parseFloat(here.x.toFixed(2)),
+      y: parseFloat(here.y.toFixed(2)),
+      z: parseFloat(here.z.toFixed(2)),
     };
     const near = rec.nodes.find((n) => dist3(n.position, p) <= SNAP_M);
     const node = near ?? {
