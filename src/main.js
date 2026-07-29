@@ -155,6 +155,36 @@ async function main() {
   catch (e) { return fail(`authorize gagal: ${e.message} (cek CORS domain di dashboard MultiSet)`); }
   draw();
 
+  // DIAGNOSTIK SEMENTARA (?mapset=true) — menguji akar "mesh meleset".
+  // SDK mendeklarasikan endpoint `mapSetDetailsUrl` DAN tipe `IMapSetMapData.relativePose`
+  // (pose tiap map di dalam map-set), tapi KEDUANYA tak pernah dipakai: 0 kemunculan di
+  // seluruh dist. ThreeAdapter mengunduh mesh map TUNGGAL (vertex di ruang map itu sendiri)
+  // lalu menerapkan worldFromMap (ruang MAP-SET) tanpa relativePose → mesh meleset persis
+  // sebesar relativePose. Hipotesis: Lt 1 = jangkar (≈identitas, tampak hampir benar),
+  // Lt 2 punya geser nyata (karena itu "yang hancur selalu lantai 2").
+  // Dijalankan dari app karena kredensial hanya hidup di sini; `client.token` getter publik.
+  if (new URLSearchParams(location.search).has("mapset")) {
+    try {
+      const res = await fetch(`https://api.multiset.ai/v1/vps/map-set/${MAPSET}`, {
+        headers: { Authorization: `Bearer ${client.token}` },
+      });
+      const body = await res.json();
+      const maps = body?.mapSet?.mapSetData ?? body?.mapSetData ?? [];
+      state.nav = `mapset HTTP ${res.status}\n` + (maps.length
+        ? maps.map((m) => {
+            const p = m.relativePose?.position ?? {}, q = m.relativePose?.rotation ?? {};
+            const mag = Math.hypot(p.x ?? 0, p.y ?? 0, p.z ?? 0);
+            return `${m.map?.mapCode} (order ${m.order})\n` +
+                   `  pos ${p.x}, ${p.y}, ${p.z}  → geser ${mag.toFixed(2)} m\n` +
+                   `  rot ${q.qx}, ${q.qy}, ${q.qz}, ${q.qw}`;
+          }).join("\n")
+        : JSON.stringify(body).slice(0, 500));
+    } catch (e) {
+      state.nav = `mapset gagal: ${e?.message ?? e}`;
+    }
+    draw();
+  }
+
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setClearColor(0x000000, 0); // Background 100% transparan untuk passthrough kamera ARCore
   document.body.appendChild(renderer.domElement);
