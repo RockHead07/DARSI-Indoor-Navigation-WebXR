@@ -335,11 +335,21 @@ async function main() {
   let activeWaypointsMap = [];   // Waypoints dalam koordinat MAP
   let currentWaypointIndex = 0;
 
+  const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
   async function loadNavGraph() {
     try {
       const res = await fetch("/data/navgraph.json");
       if (!res.ok) return null;
-      return await res.json();
+      const g = await res.json();
+      // `distance` DITURUNKAN dari posisi node, tidak disimpan di file (ADR-021: satu pemilik
+      // data). Kalau disalin manual, ia pasti melenceng begitu node digeser.
+      const at = new Map((g.nodes ?? []).map((n) => [n.id, n.position]));
+      for (const e of g.edges ?? []) {
+        const a = at.get(e.from), b = at.get(e.to);
+        e.distance = a && b ? dist3(a, b) : Infinity;   // edge menggantung → tak pernah dipilih A*
+      }
+      return g;
     } catch {
       return null;
     }
@@ -473,7 +483,13 @@ async function main() {
       return;
     }
 
-    if (lastMapPos) calculateRouteToPoi(activePoi, lastMapPos);
+    // Hitung rute HANYA kalau belum punya. Sebelumnya dipanggil tiap localize, dan karena
+    // calculateRouteToPoi mereset currentWaypointIndex=0, progres waypoint terhapus tiap
+    // 10 detik oleh background localization → jejak melompat mundur. Localize berikutnya
+    // cukup me-RE-ANCHOR rute yang sama lewat worldFromMap baru.
+    // ponytail: belum ada deteksi keluar-jalur — kalau user salah belok, rute tidak dihitung
+    // ulang. Tambahkan kalau navgraph sudah rapat dan salah-belok jadi mungkin.
+    if (lastMapPos && activeWaypointsMap.length === 0) calculateRouteToPoi(activePoi, lastMapPos);
     anchorPoiDest(activePoi, worldFromMap);
   }
 
@@ -666,6 +682,7 @@ async function main() {
       if (!target) return;
 
       activePoi = target;
+      activeWaypointsMap = []; currentWaypointIndex = 0;   // tujuan baru → paksa hitung ulang rute
       state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
       panelStandby?.classList.add("hidden");
       panelActive?.classList.remove("hidden");
@@ -685,6 +702,7 @@ async function main() {
       activePoi = null;
       destMap = null;
       destination = null;
+      activeWaypointsMap = []; currentWaypointIndex = 0;
       destMarker.visible = false;
       floorTrailGroup.visible = false;
 
@@ -769,6 +787,67 @@ async function main() {
       },
     }, null, 2);
     state.nav = `📍 REKAM POI (copy ke pois.json):\n${snippet}`;
+    draw();
+  });
+
+  // --- PEREKAM NAVGRAPH: berjalan = menggambar graf ---
+  // Tiap tap menyimpan posisi map saat ini sebagai node DAN menyambungkannya ke node
+  // sebelumnya. Jadi urutan langkahmu menyusuri koridor langsung menjadi topologi graf;
+  // tikungan direkam dengan berhenti dan menekan tombol di setiap belokan.
+  const rec = { nodes: [], edges: [] };
+
+  // Sambungkan ke node terdekat yang SUDAH ada (untuk menutup persimpangan/loop) alih-alih
+  // membuat node baru, kalau kita berdiri hampir di tempat yang sama.
+  const SNAP_M = 1.5;
+
+  mkBtn("REKAM NODE ⛓️", "#14b8a6", "#fff", 304, () => {
+    if (!lastMapPos) { state.nav = "Belum ada pose — arahkan kamera ke sekeliling dulu."; draw(); return; }
+    const p = {
+      x: parseFloat(lastMapPos.x.toFixed(2)),
+      y: parseFloat(lastMapPos.y.toFixed(2)),
+      z: parseFloat(lastMapPos.z.toFixed(2)),
+    };
+    const near = rec.nodes.find((n) => dist3(n.position, p) <= SNAP_M);
+    const node = near ?? {
+      id: `N_LT${floorOf(p.y)}_${String(rec.nodes.length + 1).padStart(2, "0")}`,
+      name: "",
+      floor: floorOf(p.y),
+      position: p,
+    };
+    if (!near) rec.nodes.push(node);
+
+    const prev = rec.lastId;
+    if (prev && prev !== node.id &&
+        !rec.edges.some((e) => (e.from === prev && e.to === node.id) || (e.from === node.id && e.to === prev))) {
+      rec.edges.push({ from: prev, to: node.id });
+    }
+    rec.lastId = node.id;
+
+    state.nav = `⛓️ ${node.id}${near ? " (nyambung ke node lama)" : ""}\n` +
+                `total: ${rec.nodes.length} node, ${rec.edges.length} edge\n` +
+                `Lanjut jalan & tap tiap tikungan. Tekan PUTUS RANTAI untuk mulai cabang baru.`;
+    draw();
+  });
+
+  mkBtn("PUTUS RANTAI ✂️", "#64748b", "#fff", 360, () => {
+    rec.lastId = null;   // tap berikutnya memulai cabang baru, tak menyambung ke node terakhir
+    state.nav = `✂️ rantai diputus — tap berikutnya jadi awal cabang baru.\n` +
+                `total: ${rec.nodes.length} node, ${rec.edges.length} edge`;
+    draw();
+  });
+
+  mkBtn("EXPORT NAVGRAPH 💾", "#e11d48", "#fff", 416, async () => {
+    if (rec.nodes.length === 0) { state.nav = "Belum ada node direkam."; draw(); return; }
+    // distance TIDAK diekspor — diturunkan saat loadNavGraph (ADR-021).
+    const json = JSON.stringify({ nodes: rec.nodes, edges: rec.edges }, null, 2);
+    let msg = `💾 ${rec.nodes.length} node, ${rec.edges.length} edge`;
+    try {
+      await navigator.clipboard.writeText(json);
+      msg += " — TERSALIN ke clipboard. Tempel ke public/data/navgraph.json.";
+    } catch {
+      msg += " — clipboard ditolak, salin manual dari bawah:\n" + json;
+    }
+    state.nav = msg;
     draw();
   });
 

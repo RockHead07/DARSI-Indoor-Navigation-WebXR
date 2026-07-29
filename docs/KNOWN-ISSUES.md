@@ -87,13 +87,20 @@ tidak ada edge tangga/lift.
 
 ## Navigasi Garis Lurus (A* sudah ada, navgraph masih minimal)
 
-**Status:** SEBAGIAN — mesin A* jalan (`solveAStar`), datanya yang kurang  
-**Dampak:** `navgraph.json` baru 3 node / 2 edge di Lantai 2. Di luar cakupan itu, rute
-jatuh ke fallback garis lurus ke POI, yang bisa menembus dinding.
+**Status:** SEBAGIAN — mesin A* jalan (`solveAStar`), **datanya yang kurang**  
+**Dampak:** jejak chevron terlihat "cuma menuju POI", bukan mengikuti koridor.
 
-**Rencana penanganan:**
-1. Perluas `public/data/navgraph.json` lewat perekaman lapangan (tombol REKAM POI 📍).
-2. Lihat `docs/ROADMAP-PATHFINDING.md` untuk spesifikasi lengkap.
+**Bukan bug A\*.** Terbukti di Uji 4: `navgraph.json` hanya 3 node yang **hampir segaris**
+(x bergeser 0.44 m sepanjang z 5.3 m), jadi rute optimalnya memang lurus. Dan graf mencakup
+5 m gedung sementara user menavigasi 34 m — jejak didominasi satu segmen lurus dari posisi
+user ke node pertama.
+
+**Alat sudah siap (ADR-W009).** Di Mode Admin: **REKAM NODE ⛓️** (auto-edge ke node
+sebelumnya, snap 1.5 m untuk menutup persimpangan), **PUTUS RANTAI ✂️** (mulai cabang baru),
+**EXPORT NAVGRAPH 💾** (salin seluruh JSON ke clipboard).
+
+**Yang tersisa:** satu sesi lapangan menyusuri koridor Jemursari sambil menekan tombol di
+tiap tikungan. **Ini prasyarat terbesar yang tersisa** — lihat `docs/ROADMAP-PATHFINDING.md`.
 
 ---
 

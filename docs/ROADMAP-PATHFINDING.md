@@ -51,9 +51,15 @@ Tentukan jaringan titik koridor (*waypoints/nodes*) dan koneksi antar-titik (*ed
   berikutnya lewat A* dan tidak menembus dinding.
 - ⬜ **HUD Instructions**: teks instruksi kontekstual di HUD (mis. *"Lurus 15m, lalu belok kanan
   ke Poli Anak"*). Belum ada.
-- ⬜ **Navgraph memadai**: `navgraph.json` masih 3 node / 2 edge di Lantai 2 saja. Sampai node
-  koridor Lantai 1 + tangga/lift direkam, rute A* nyaris garis lurus dan chevron belum
-  menunjukkan nilai penuhnya. **Ini prasyarat terbesar yang tersisa di roadmap ini.**
+- ⬜ **Navgraph memadai**: `navgraph.json` masih 3 node / 2 edge di Lantai 2 saja, dan
+  ketiganya hampir segaris — terbukti di Uji 4 sebagai penyebab jejak tampak lurus.
+  **Ini prasyarat terbesar yang tersisa di roadmap ini.**
+  - ✅ **Alatnya sudah ada** (ADR-W009): REKAM NODE ⛓️ / PUTUS RANTAI ✂️ / EXPORT NAVGRAPH 💾
+    di Mode Admin. Berjalan = menggambar graf; `distance` diturunkan, tidak ditulis tangan.
+  - ⬜ Sesi lapangan: susuri koridor Lantai 2, lalu Lantai 1, tandai node tangga/lift untuk
+    membuka rute lintas-lantai yang sekarang masih digerbangi (ADR-W007).
+- ⬜ **Deteksi keluar-jalur**: rute belum dihitung ulang kalau user salah belok. Ditandai
+  `ponytail:` di `src/main.js`; kerjakan setelah navgraph rapat.
 
 ---
 

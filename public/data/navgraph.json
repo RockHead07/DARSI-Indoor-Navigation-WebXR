@@ -1,4 +1,5 @@
 {
+  "_catatan": "distance TIDAK disimpan di sini — diturunkan dari posisi node saat loadNavGraph (ADR-021: satu pemilik data). Rekam node lewat tombol REKAM NODE di Mode Admin, lalu EXPORT NAVGRAPH.",
   "nodes": [
     {
       "id": "NODE_LT2_START",
@@ -20,15 +21,7 @@
     }
   ],
   "edges": [
-    {
-      "from": "NODE_LT2_START",
-      "to": "NODE_LT2_MID",
-      "distance": 2.7
-    },
-    {
-      "from": "NODE_LT2_MID",
-      "to": "POIKU_1",
-      "distance": 2.6
-    }
+    { "from": "NODE_LT2_START", "to": "NODE_LT2_MID" },
+    { "from": "NODE_LT2_MID", "to": "POIKU_1" }
   ]
 }

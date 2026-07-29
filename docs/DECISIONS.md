@@ -255,6 +255,57 @@ Chevron lantai menjadi penunjuk arah **tunggal**. Panah 3D HUD dihapus seluruhny
 
 ---
 
+## ADR-W009 — Navgraph direkam sambil berjalan; `distance` diturunkan (2026-07-29)
+
+### Konteks
+Uji 4 menunjukkan jejak chevron "cuma menuju POI", bukan mengikuti koridor. Penyebabnya
+bukan A* — mesin A* benar. Datanya:
+
+```
+NODE_LT2_START  x=-2.00  z=34.30
+NODE_LT2_MID    x=-1.80  z=37.00
+POIKU_1         x=-1.56  z=39.58
+```
+
+Ketiga node **hampir segaris** (x bergeser 0.44 m sepanjang z 5.3 m), jadi rute optimal
+memang garis lurus. Dan graf hanya mencakup **5 m** gedung sementara user menavigasi **34 m**
+— `updateFloorTrail` menggambar dari posisi user ke waypoint pertama, sehingga jejaknya
+didominasi satu segmen lurus sepanjang 35 m. Pathfinding tak bisa menolong di tempat yang
+tidak punya graf.
+
+Merekam graf secara manual tidak realistis: tombol REKAM POI 📍 mencetak satu cuplikan JSON
+untuk disalin tangan, dan `edges` beserta `distance`-nya harus ditulis sendiri.
+
+### Keputusan
+1. **Berjalan = menggambar graf.** Tombol **REKAM NODE ⛓️** menyimpan posisi map saat ini
+   sebagai node **dan otomatis menyambungkannya ke node sebelumnya**. Urutan langkah menyusuri
+   koridor langsung menjadi topologi graf; tikungan direkam dengan menekan tombol di tiap belokan.
+   - **Snap 1.5 m:** berdiri di dekat node yang sudah ada → menyambung ke node itu, bukan
+     membuat node baru. Ini yang menutup persimpangan dan loop.
+   - **PUTUS RANTAI ✂️** memulai cabang baru tanpa menyambung ke node terakhir.
+   - **EXPORT NAVGRAPH 💾** menyalin seluruh JSON ke clipboard sekaligus.
+2. **`distance` TIDAK disimpan** di `navgraph.json` — diturunkan dari posisi node saat
+   `loadNavGraph()`.
+
+### Alasan
+- Topologi koridor paling akurat direkam oleh orang yang benar-benar melewatinya; jalur kaki
+  itu sendiri adalah datanya.
+- `distance` yang disalin manual adalah duplikasi data yang dipelihara tangan — persis
+  anti-pattern yang ditolak ADR-021. Ia pasti melenceng begitu posisi node digeser.
+  Posisi node = satu-satunya pemilik; jarak diturunkan.
+
+### Konsekuensi
+- Edge menggantung (menunjuk node tak ada) mendapat `distance = Infinity` → tak pernah
+  dipilih A*, alih-alih membuat rute diam-diam salah.
+- Verifikasi: derivasi diuji terhadap nilai tulis-tangan lama — 2.709 vs 2.7 dan 2.591 vs 2.6.
+- **Perbaikan menyertai:** `calculateRouteToPoi` dulu dipanggil tiap localize dan mereset
+  `currentWaypointIndex = 0`, sehingga progres waypoint terhapus tiap 10 detik oleh background
+  localization. Kini rute dihitung hanya saat belum ada; localize berikutnya cukup me-re-anchor.
+- **Belum ada deteksi keluar-jalur** — kalau user salah belok, rute tidak dihitung ulang.
+  Ditandai `ponytail:` di kode; tambahkan setelah navgraph rapat.
+
+---
+
 ## ADR dari repo Unity yang tetap berlaku
 
 - **ADR-020:** Lift memutus tracking $\rightarrow$ navigasi tersegmentasi. Di web: manfaatkan `relocalization` otomatis VPS + pantau perubahan `mapCodes` / `position.Y` untuk konfirmasi perpindahan lantai.
