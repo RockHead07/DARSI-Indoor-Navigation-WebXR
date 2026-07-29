@@ -47,6 +47,10 @@ Merekam koordinat POI secara langsung dari VPS melalui tombol **REKAM POI** pada
 
 ## ADR-W003 — `showMesh: false` untuk produksi AR (2026-07-28)
 
+> **Diperluas oleh ADR-W006 (2026-07-29):** keputusan "produksi tanpa mesh" tetap berlaku,
+> tetapi mesh kini bisa dihidupkan sebagai alat diagnostik lewat `?mesh=true`.
+
+
 ### Konteks
 Secara default, opsi `showMesh: true` pada `ThreeAdapter` mengonstruksi dan menampilkan mesh 3D gedung hasil scan VPS sebagai overlay di atas kamera. Pada pengujian lapangan, mesh ini tampak melayang atau offset akibat variansi akurasi scan.
 
@@ -89,7 +93,22 @@ Pada Chrome Android WebXR `immersive-ar`, munculnya dialog izin OS (seperti `nav
 ### Keputusan
 1. **Pre-Fetch Geolocation**: Memanggil dan meng-warmup izin Geolocation di luar sesi WebXR (sebelum tombol "START AR" ditap).
 2. **Cached GeoPose**: Menggunakan koordinat GPS dari cache browser (`maximumAge: 60000`) untuk Geo-Hint VPS tanpa memicu dialog OS/timeout 10 detik saat sesi AR aktif.
-3. **ARCore Warm-Up Period**: Memberikan jeda 1.5 detik setelah sesi WebXR dimulai sebelum memicu lokalisasi VPS pertama (`autoLocalize`).
+3. **ARCore Warm-Up Period**: Memberikan jeda 1.5 detik (`ARCORE_WARMUP_MS`) setelah sesi WebXR dimulai sebelum memicu lokalisasi VPS pertama.
+
+> **Koreksi 2026-07-29 — poin 3 sebelumnya tercatat tapi TIDAK PERNAH ADA di kode.**
+> Yang terpasang hanyalah `poseTimeoutMs: 20000`, dan itu bukan jeda. Dokumentasi SDK:
+> *"Max ms to wait for a valid viewer pose before failing"* — batas atas menunggu, bukan
+> penundaan. Sementara `autoLocalize: true` membuat SDK memicu `localizeFrame()` di
+> **rAF berikutnya persis** setelah sesi mulai (`e.requestAnimationFrame(() => this.localizeFrame())`
+> di `core/index.js`), yaitu saat tracking ARCore masih dingin.
+>
+> Ini bukan sekadar cacat dokumentasi. Karena `worldFromMap = worldFromCamera@capture · pose⁻¹`,
+> `worldFromCamera` yang diambil saat tracking dingin **meracuni anchor sejak lahir** — kandidat
+> penyebab offset mesh yang selama ini dikejar.
+>
+> **Mekanisme sebenarnya yang kini diimplementasikan:** `autoLocalize: false` +
+> `setTimeout(() => adapter.localizeFrame(), ARCORE_WARMUP_MS)` di `onSessionStart`.
+> (`trackingCaptureDelayMs` milik SDK tidak bisa dipakai — hanya berlaku untuk `trackObjects()`.)
 
 ### Alasan
 - Mencegah *focus loss* dari prompt izin OS saat sesi WebXR berjalan.
@@ -99,6 +118,88 @@ Pada Chrome Android WebXR `immersive-ar`, munculnya dialog izin OS (seperti `nav
 ### Konsekuensi
 - Sesi AR WebXR berjalan 100% stabil dan lancar di Chrome Android.
 - Fitur `passGeoPose` tetap aktif memberikan Geo-Hint ke server VPS tanpa risiko mematikan kamera.
+
+---
+
+## ADR-W006 — Occlusion ditunda; mesh jadi alat diagnostik `?mesh=true` (2026-07-29)
+
+### Konteks
+Occlusion depth masking (`showMesh: true` + material `colorWrite:false, depthWrite:true`)
+diimplementasikan 2026-07-28. Audit terhadap source SDK menemukan dua cacat:
+
+1. **Occluder tidak pernah terpasang di lokalisasi pertama.** Urutan `handleLocalizationResult`
+   di `dist/three/index.js`: `onLocalizationSuccess` dipanggil **lebih dulu**, baru
+   `fetchMapDetails` → `ensureMeshLoaded` → `applyMeshTransform`. Saat callback kita jalan,
+   mesh belum ada di scene, sehingga masuk dengan material asli SDK (`ShaderMaterial` ungu
+   `#7B2CBF`, opacity 0.58, grid kuning). Baru lokalisasi berikutnya (~10 dtk, via
+   `bgLocalizationInterval`) yang membuatnya tak terlihat.
+2. **Scope terbalik.** `applyOccluderMaterial(scene)` menjadikan *setiap* mesh yang bukan
+   turunan `arrowGroup`/`destMarker` sebagai occluder tak terlihat — termasuk gizmo bawaan
+   SDK (`showGizmo` default `true`, tak pernah dimatikan), pilar POI, garis navgraph, dan
+   chevron. Konsekuensinya: mesh apapun yang ditambahkan ke scene nanti otomatis jadi
+   tembok tak terlihat.
+
+Lebih mendasar: occluder dibangun **di atas mesh yang terbukti miring** (FIELD-TESTS Uji 2).
+Occluder yang salah posisi mengklip panah di tempat yang keliru, dan karena `colorWrite:false`
+penyebabnya tak bisa dilihat — panah hilang tanpa penjelasan.
+
+### Keputusan
+1. Occlusion **ditunda**. `applyOccluderMaterial()` dicabut dari kode.
+2. `showMesh` dibaca dari URL: `?mesh=true` → aktif, selain itu non-aktif.
+3. `showGizmo: false` ditambahkan secara eksplisit (default SDK `true`).
+
+### Alasan
+- Mencabut mesh menghapus cacat 1 & 2 sekaligus, tanpa menambal gejala.
+- Mesh **tidak boleh dihapus total**: FIELD-TESTS Uji 2 mencatat mesh overlay adalah
+  **satu-satunya cek AKURASI yang kita punya** (`geser` kecil hanya membuktikan
+  *repeatability*, bukan *accuracy*). Menghapusnya berarti membuang alat ukur — termasuk
+  alat untuk menilai perbaikan warm-up ARCore di ADR-W005.
+- Dengan `showMesh` & `showGizmo` dua-duanya `false`, SDK tidak membuat `this.world` sama
+  sekali → tanpa download mesh, tanpa Draco, tanpa shader.
+
+### Konsekuensi
+- Produksi: kamera bersih sejak detik pertama, tanpa kilatan mesh ungu 10 detik.
+- Panah & pilar POI kembali tembus tembok fisik (lihat `docs/KNOWN-ISSUES.md`).
+- `?mesh=true` sengaja menampilkan mesh — di mode diagnostik kita justru ingin melihatnya.
+- Mutasi `d.mapCodes` (ADR-W001) kini digerbangi `SHOW_MESH`: hanya perlu saat mesh dimuat,
+  karena `ThreeAdapter` membaca `mapCodes[0]` untuk memilih mesh lantai.
+
+### Syarat menghidupkan kembali
+Occlusion baru layak dipasang lagi **setelah mesh terbukti sejajar dengan koridor nyata**.
+Saat itu, wajib ikut dibawa: (a) pemasangan material occluder **setelah** mesh benar-benar
+masuk scene, bukan di `onLocalizationSuccess`; (b) scope dibatasi ke `meshGroup` milik SDK
+saja, bukan seluruh `scene`. Spesifikasi lama tersimpan di
+`docs/superpowers/specs/2026-07-28-occlusion-depth-masking-design.md`.
+
+---
+
+## ADR-W007 — Rute lintas-lantai: gerbang jujur, bukan rute palsu (2026-07-29)
+
+### Konteks
+`calculateRouteToPoi` memfilter node start **dan** target memakai lantai POI. User di
+Lantai 1 menuju POI Lantai 2 → `findClosestNode(posisiUserLt1, floor=2)` mengembalikan node
+Lantai 2 terdekat dari posisi Lantai 1, lalu A* menggambar rute yang menembus lantai.
+`navgraph.json` juga belum punya satu pun node Lantai 1 maupun edge tangga/lift.
+
+### Keputusan
+Selama `activePoi.floor !== floorOf(posisiUser.y)`: **jangan gambar apapun.** Sembunyikan
+panah, chevron trail, dan pilar tujuan; tampilkan pesan `"Naik/Turun ke Lantai N dulu —
+navigasi aktif otomatis setelah sampai"`. Gerbang dipasang di `navigateToActivePoi()`,
+satu-satunya jalur masuk navigasi POI (dipakai `onLocalizationSuccess` **dan** tombol
+"Navigasi"), supaya tak ada pemanggil yang bisa melewatinya.
+
+### Alasan
+- Rute yang salah lebih berbahaya daripada tidak ada rute — user mengikuti panah dengan
+  percaya diri ke arah yang keliru.
+- Pemulihannya otomatis: begitu user tiba di lantai benar, lokalisasi berikutnya membaca
+  `position.Y` (ADR-W001) dan navigasi hidup sendiri. Tidak butuh data lapangan baru.
+- A* multi-lantai penuh (ADR-020: lift memutus tracking → navigasi tersegmentasi) menunggu
+  sesi rekam navgraph di Jemursari: minimal node tangga/lift per lantai + node koridor Lt 1.
+
+### Konsekuensi
+- `calculateRouteToPoi` kini memfilter start pakai lantai user dan target pakai lantai POI
+  — semantiknya benar dan siap untuk multi-lantai, walau saat ini keduanya selalu sama.
+- Utang yang tercatat: `docs/KNOWN-ISSUES.md` → "Rute lintas-lantai belum ada".
 
 ---
 

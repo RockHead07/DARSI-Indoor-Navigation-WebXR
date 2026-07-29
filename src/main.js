@@ -1,11 +1,14 @@
-// Milestone 3: NAVIGASI KASAR — uji "cukup gak buat nyampe ruangan".
+// DARSI WebXR — navigasi AR indoor map-anchored (POI → A* → panah + chevron di lantai).
 // Fokus produk: app KECIL (WebXR, tanpa Unity 365MB) + update tanpa Play Store. Presisi AR
-// BUKAN tujuan — cukup: tahu lantai (pos.Y) + panah arah + jarak + "sampai". Kalau navigasi
-// kasar map-anchored sudah memandu orang ke ruangan meski tilt → web MENANG (kecil+updatable).
-//   - TUJUAN (MAP): rekam tujuan dalam KOORDINAT MAP (dari localize terakhir), di-re-anchor
-//     tiap localize via worldFromMap → INI yang menguji apakah map-anchoring cukup akurat.
-//   - SET TUJUAN (world): drop-pin ARCore (map-independent) — pembanding.
-// showMesh:false — mesh cuma diagnostik; produk tak merender mesh.
+// BUKAN tujuan — cukup: tahu lantai (pos.Y) + panah arah + jarak + "sampai".
+//
+// Mode:
+//   - default              : produk. Kamera bersih, tanpa mesh (ADR-W006).
+//   - ?mesh=true           : DIAGNOSTIK. Render mesh gedung VPS — satu-satunya cek AKURASI
+//                            yang kita punya (FIELD-TESTS Uji 2). Occlusion dicabut, jadi
+//                            di mode ini mesh memang sengaja terlihat.
+//   - ?admin=true / debug  : overlay semua POI + graph koridor + tombol developer.
+//   - ?poiId=<id>          : langsung navigasi ke POI itu (dipanggil dari WebView).
 
 import * as THREE from "three";
 import { MultisetClient, XRSessionManager } from "@multisetai/vps/core";
@@ -14,6 +17,22 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
+
+// Tinggi HP dari lantai saat dipegang jalan. Semua koordinat map direkam pada ketinggian
+// ini (localize memakai pose kamera), jadi lantai = worldY objek − EYE_HEIGHT.
+// ponytail: ini knob kalibrasi lapangan, bukan konstanta fisika — setel kalau chevron
+// tampak tenggelam/melayang.
+const EYE_HEIGHT = 1.4;
+
+// Jeda sebelum localize pertama, memberi ARCore waktu mengunci feature point (ADR-W005).
+const ARCORE_WARMUP_MS = 1500;
+
+// Ambang elevasi map-space pemisah lantai (ADR-W001: Lt1 Y≈−0.5, Lt2 Y≈3.7).
+const floorOf = (mapY) => (mapY >= 1.5 ? 2 : 1);
+
+// Mesh gedung VPS = alat DIAGNOSTIK, bukan fitur produk (ADR-W006). Dibaca sekali saat load
+// karena ThreeAdapter membaca showMesh sekali di constructor.
+const SHOW_MESH = new URLSearchParams(location.search).has("mesh");
 
 // --- kontrak alur-balik ke CopyCat (Flutter) — lihat docs/DEEPLINK-CONTRACT.md ---
 // Halaman ini jalan di Chrome Custom Tab yang diluncurkan CopyCat. "Selesai" harus balik
@@ -155,13 +174,25 @@ async function main() {
     client,
     overlayRoot: document.body,       // HUD ikut tampil saat AR
     referenceSpaceType: "local",      // 'local' dijamin didukung oleh semua perangkat WebXR
-    autoLocalize: true,
-    poseTimeoutMs: 20000,             // 20s grace period untuk ARCore warm-up di awal sesi (ADR-W005)
+    // autoLocalize DIMATIKAN SENGAJA (ADR-W005). SDK memicunya di rAF berikutnya PERSIS
+    // setelah sesi mulai — saat tracking ARCore masih dingin. Karena
+    // worldFromMap = worldFromCamera@capture · pose⁻¹, worldFromCamera yang dingin
+    // meracuni anchor sejak lahir. poseTimeoutMs BUKAN jeda ("max ms to wait for a valid
+    // viewer pose"), jadi tidak bisa dipakai untuk ini. Localize pertama dipicu manual
+    // setelah ARCORE_WARMUP_MS di onSessionStart.
+    autoLocalize: false,
+    poseTimeoutMs: 20000,             // batas atas menunggu viewer pose valid sebelum menyerah
     relocalization: true,             // auto re-localize saat tracking pulih dari loss (mis. keluar tangga)
     backgroundLocalization: true,
     bgLocalizationInterval: 10,       // 10s (min) — auto-relocalize lebih sering → pulih cepat dari drift/pose-loss
-    confidenceCheck: true, confidenceThreshold: 0.5,   // threshold seimbang untuk indoor
-    onSessionStart: () => { renderer.domElement.style.display = "none"; state.session = "AKTIF"; draw(); },
+    confidenceCheck: true,            // threshold jatuh ke default SDK 0.5; conf terbukti bukan filter andal (FIELD-TESTS Uji 1)
+    onSessionStart: () => {
+      renderer.domElement.style.display = "none"; state.session = "AKTIF"; draw();
+      setTimeout(() => {
+        if (!adapter.isActive()) return;             // user keburu menutup sesi
+        adapter.localizeFrame().catch((e) => { state.last = `localize awal gagal: ${e?.message ?? e}`; draw(); });
+      }, ARCORE_WARMUP_MS);
+    },
     onSessionEnd:   () => { renderer.domElement.style.display = "block"; state.session = "berhenti (sesi WebXR diakhiri browser/user)"; draw(); },
     // DIAGNOSTIK: intrinsics yang BENAR-BENAR dikirim ke VPS. App native pakai kalibrasi
     // kamera asli; jalur web menurunkan dari proyeksi WebXR. Kalau fx≠fy jauh, atau px/py
@@ -177,12 +208,14 @@ async function main() {
         state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`;
         lastMapPos = new THREE.Vector3(p.x, p.y, p.z);
 
-        // KOREKSI MESH SDK: Urutkan mapCodes berdasarkan elevasi Y real-time.
-        // Y >= 1.5m = Lantai 2 (MAP_MW1QTZWG1TLG di index 0)
-        // Y <  1.5m = Lantai 1 (MAP_BCADVLIXFSJE di index 0)
-        // Dengan ini ThreeAdapter akan memuat mesh GLTF lantai yang BENAR (bukan tertukar).
-        const isFloor2 = p.y >= 1.5;
-        d.mapCodes = isFloor2 ? ["MAP_MW1QTZWG1TLG", "MAP_BCADVLIXFSJE"] : ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];
+        // Hanya relevan saat SHOW_MESH: ThreeAdapter memuat mesh dari mapCodes[0], padahal
+        // urutan mapCodes = artefak urutan hintMapCodes, BUKAN peringkat kecocokan (ADR-W001).
+        // Urutkan ulang pakai elevasi Y supaya mesh lantai yang dimuat benar, bukan tertukar.
+        if (SHOW_MESH) {
+          d.mapCodes = floorOf(p.y) === 2
+            ? ["MAP_MW1QTZWG1TLG", "MAP_BCADVLIXFSJE"]
+            : ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];
+        }
       }
       const codes = (d.mapCodes || []).join(",");
       if (codes) state.seen.add(codes);
@@ -199,7 +232,6 @@ async function main() {
     new THREE.CylinderGeometry(0.06, 0.06, 1.6, 12),
     new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
   destMarker.visible = false;
-  destMarker.renderOrder = 1;                    // Render order > 0 agar ter-clip oleh Occlusion Depth Mask
   scene.add(destMarker);
 
   // Group penanda 3D untuk SEMUA POI (Mode Admin / Overlay Debug)
@@ -215,7 +247,6 @@ async function main() {
   // Group animasi panah beranimasi yang berjalan menapak di atas lantai koridor (Floor Chevron Trail)
   const floorTrailGroup = new THREE.Group();
   floorTrailGroup.visible = false;
-  floorTrailGroup.renderOrder = 1;              // ter-clip secara realistis oleh Occluder Tembok Gedung VPS
   scene.add(floorTrailGroup);
 
   // Geometri panah chevron 3D datar menapak lantai
@@ -242,7 +273,6 @@ async function main() {
   // Group pembungkus panah 3D (3D GLTF model dengan fallback ArrowHelper)
   const arrowGroup = new THREE.Group();
   arrowGroup.visible = false;
-  arrowGroup.renderOrder = 1;                   // Render order > 0 agar ter-clip oleh Occlusion Depth Mask
   scene.add(arrowGroup);
 
   const fallbackArrow = new THREE.ArrowHelper(
@@ -306,7 +336,7 @@ async function main() {
     if (!destMap || !lastWorldFromMap) return;
     destination = destMap.clone().applyMatrix4(lastWorldFromMap);
     destMarker.position.copy(destination);
-    destMarker.position.y = destination.y - 0.7;
+    destMarker.position.y = destination.y - EYE_HEIGHT;
     destMarker.visible = true; arrowGroup.visible = true;
   }
 
@@ -414,9 +444,11 @@ async function main() {
 
   function calculateRouteToPoi(poi, userMapPos) {
     if (!poi || !navGraph) return;
-    const floor = poi.floor ?? (userMapPos.y >= 1.5 ? 2 : 1);
-    const startNode = findClosestNode(userMapPos, floor);
-    const targetNode = findClosestNode(poi.position, floor);
+    // Start difilter pakai lantai USER, target pakai lantai POI. Sekarang keduanya selalu
+    // sama karena gerbang lintas-lantai di onLocalizationSuccess, tapi memisahkannya membuat
+    // semantiknya benar dan siap untuk A* multi-lantai (butuh node tangga/lift dulu).
+    const startNode = findClosestNode(userMapPos, floorOf(userMapPos.y));
+    const targetNode = findClosestNode(poi.position, poi.floor ?? floorOf(poi.position.y));
 
     if (startNode && targetNode && startNode.id !== targetNode.id) {
       const nodePath = solveAStar(startNode.id, targetNode.id);
@@ -433,12 +465,31 @@ async function main() {
     currentWaypointIndex = 0;
   }
 
+  // Satu-satunya jalur masuk navigasi ke POI — dipakai onLocalizationSuccess DAN tombol
+  // "Navigasi". Gerbang lintas-lantai dipasang di sini supaya tak ada pemanggil yang lolos.
+  function navigateToActivePoi(worldFromMap) {
+    if (!activePoi || !worldFromMap) return;
+    const poiFloor = activePoi.floor ?? floorOf(activePoi.position.y);
+
+    // GERBANG LINTAS-LANTAI: navgraph belum punya node tangga/lift (ADR-020), jadi rute
+    // antar-lantai tak bisa dihitung. Lebih baik diam jujur daripada menggambar rute palsu
+    // yang menembus lantai. Begitu user sampai, localize berikutnya membaca Y dan rute jalan.
+    if (lastMapPos && floorOf(lastMapPos.y) !== poiFloor) {
+      activeWaypointsMap = []; currentWaypointIndex = 0; destination = null;
+      destMarker.visible = false; arrowGroup.visible = false; floorTrailGroup.visible = false;
+      const arah = poiFloor > floorOf(lastMapPos.y) ? "Naik" : "Turun";
+      state.nav = `${arah} ke Lantai ${poiFloor} dulu — ${activePoi.name} ada di sana. ` +
+                  `Navigasi aktif otomatis setelah sampai.`;
+      return;
+    }
+
+    if (lastMapPos) calculateRouteToPoi(activePoi, lastMapPos);
+    anchorPoiDest(activePoi, worldFromMap);
+  }
+
   // --- POI navigation: transform koordinat map-space POI ke world-space ---
   function anchorPoiDest(poi, worldFromMap) {
-    if (lastMapPos && activeWaypointsMap.length === 0) {
-      calculateRouteToPoi(poi, lastMapPos);
-    }
-    if (activeWaypointsMap.length > 0 && lastWorldFromMap) {
+    if (activeWaypointsMap.length > 0) {
       const activeWaypointMap = activeWaypointsMap[currentWaypointIndex] || activeWaypointsMap[activeWaypointsMap.length - 1];
       destination = activeWaypointMap.clone().applyMatrix4(worldFromMap);
     } else {
@@ -448,27 +499,9 @@ async function main() {
     // Set penanda pilar di lokasi POI akhir
     const finalPoiPos = new THREE.Vector3(poi.position.x, poi.position.y, poi.position.z).applyMatrix4(worldFromMap);
     destMarker.position.copy(finalPoiPos);
-    destMarker.position.y = finalPoiPos.y - 0.7;
+    destMarker.position.y = finalPoiPos.y - EYE_HEIGHT;   // POI direkam pada tinggi mata → turunkan ke lantainya
     destMarker.visible = true;
     arrowGroup.visible = true;
-  }
-
-  function applyOccluderMaterial(rootNode) {
-    rootNode.traverse((child) => {
-      if (child.isMesh && child !== destMarker) {
-        let isNavObject = false;
-        child.traverseAncestors((ancestor) => {
-          if (ancestor === arrowGroup || ancestor === destMarker) isNavObject = true;
-        });
-        if (!isNavObject) {
-          child.material = new THREE.MeshBasicMaterial({
-            colorWrite: false, // Tidak melukis piksel warna (feed kamera HP 100% transparan & jernih)
-            depthWrite: true,  // Tetap melukis z-depth 3D (tembok memblokir objek AR di belakangnya)
-          });
-          child.renderOrder = 0;
-        }
-      }
-    });
   }
 
   function renderAllPoisOverlay(worldFromMap) {
@@ -484,8 +517,7 @@ async function main() {
         new THREE.MeshBasicMaterial({ color: 0x06b6d4 }) // Cyan cyan modern untuk POI Overlay
       );
       poiMarker.position.copy(poiWorldPos);
-      poiMarker.position.y = poiWorldPos.y - 0.5;
-      poiMarker.renderOrder = 1;
+      poiMarker.position.y = poiWorldPos.y - EYE_HEIGHT;   // tiap POI duduk di lantainya sendiri
       allPoiMarkersGroup.add(poiMarker);
     });
   }
@@ -507,7 +539,6 @@ async function main() {
         new THREE.MeshBasicMaterial({ color: 0xfacc15 })
       );
       dot.position.copy(wPos);
-      dot.renderOrder = 1;
       navGraphLinesGroup.add(dot);
     });
 
@@ -521,7 +552,6 @@ async function main() {
           geometry,
           new THREE.LineBasicMaterial({ color: 0xfde047, linewidth: 2 })
         );
-        line.renderOrder = 1;
         navGraphLinesGroup.add(line);
       }
     });
@@ -544,8 +574,10 @@ async function main() {
 
     if (waypointsWorld.length < 2) return;
 
-    // Ketinggian lantai dasar (8cm di atas lantai)
-    const floorY = waypointsWorld[waypointsWorld.length - 1].y - 0.7;
+    // Lantai diturunkan dari posisi USER, bukan dari tujuan: user selalu berdiri di lantainya
+    // sendiri. (Sebelumnya dipakai waypoint terakhir → menuju POI lantai lain membuat chevron
+    // melayang setinggi beda lantai.)
+    const floorY = userWorldPos.y - EYE_HEIGHT;
 
     // Jarak interval antar panah (0.5m)
     const spacing = 0.5;
@@ -574,7 +606,6 @@ async function main() {
         // Putar chevron mengarah ke segmen jalur berikutnya di lantai
         const lookTarget = pos.clone().add(segDir);
         chevron.lookAt(lookTarget);
-        chevron.renderOrder = 1;
         floorTrailGroup.add(chevron);
       }
     }
@@ -583,7 +614,8 @@ async function main() {
 
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: true,           // Muat mesh gedung VPS untuk digunakan sebagai Invisible Depth Occluder
+    showMesh: SHOW_MESH,      // hanya di ?mesh=true — mesh = alat ukur akurasi, bukan fitur (ADR-W006)
+    showGizmo: false,         // default SDK true; gizmo bawaannya tak dipakai (kita punya gizmo sendiri)
     useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       if (!destination) return;
@@ -626,8 +658,6 @@ async function main() {
       draw();
     },
     onLocalizationSuccess: (_result, worldFromMap) => {
-      // Terapkan Invisible Depth Mask Material ke mesh gedung VPS yang baru dimuat
-      applyOccluderMaterial(scene);
       renderAllPoisOverlay(worldFromMap);
       renderNavGraphOverlay(worldFromMap);
 
@@ -642,10 +672,8 @@ async function main() {
       if (lastOriginWorld) state.drift = `${now.distanceTo(lastOriginWorld).toFixed(2)} m`;
       lastOriginWorld = now;
       lastWorldFromMap = worldFromMap;
-      if (activePoi) {
-        if (lastMapPos) calculateRouteToPoi(activePoi, lastMapPos);
-        anchorPoiDest(activePoi, worldFromMap);  // POI mode: re-anchor & update route tiap localize
-      } else if (destMap) anchorDest();          // Developer mode: re-anchor destMap
+      if (activePoi) navigateToActivePoi(worldFromMap);   // re-anchor & update rute tiap localize
+      else if (destMap) anchorDest();                     // Developer mode: re-anchor destMap
       draw();
     },
   });
@@ -668,9 +696,7 @@ async function main() {
       panelStandby?.classList.add("hidden");
       panelActive?.classList.remove("hidden");
 
-      if (lastWorldFromMap) {
-        anchorPoiDest(activePoi, lastWorldFromMap);
-      }
+      if (lastWorldFromMap) navigateToActivePoi(lastWorldFromMap);
       draw();
 
       // Pemicu 1-Tap AR: Mulai sesi WebXR AR jika belum aktif
@@ -730,7 +756,7 @@ async function main() {
     const wp = new THREE.Vector3(); camera.getWorldPosition(wp);
     destination = wp.clone();
     destMarker.position.copy(wp);
-    destMarker.position.y = wp.y - 0.7;
+    destMarker.position.y = wp.y - EYE_HEIGHT;
     destMarker.visible = true; arrowGroup.visible = true;
     state.nav = "tujuan(world) diset — menjauh lalu kembali";
     draw();

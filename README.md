@@ -33,7 +33,15 @@ iOS tidak didukung (Safari tanpa `camera-access`).
 https://darsi-webxr.vercel.app/?poiId=POIKU_1
 ```
 
-Tanpa `?poiId=` → mode developer (tombol SET TUJUAN, TUJUAN MAP, RELOCALIZE).
+Tanpa `?poiId=` → pilih tujuan dari dropdown di panel bawah.
+
+### Query param
+
+| Param | Efek |
+|---|---|
+| `?poiId=<id>` | Langsung navigasi ke POI itu (dipanggil dari WebView) |
+| `?admin=true` (atau `debug=true`) | Overlay semua POI + graph koridor + tombol developer |
+| `?mesh=true` | **Diagnostik.** Render mesh gedung VPS — satu-satunya cek akurasi yang kita punya (ADR-W006) |
 
 ---
 
@@ -58,12 +66,17 @@ Tanpa `?poiId=` → mode developer (tombol SET TUJUAN, TUJUAN MAP, RELOCALIZE).
 - [x] Diskriminasi lantai TERBUKTI (`position.Y` sebagai sinyal)
 - [x] Navigasi world-anchored berfungsi (panah + jarak + "sampai")
 - [x] Panah 3D kustom (`public/models/arrow.gltf`)
-- [x] Kamera AR aktif jernih (`showMesh: false`)
+- [x] Kamera AR aktif jernih; mesh jadi diagnostik `?mesh=true` (ADR-W006)
+- [x] Mesin A* + navigasi POI map-anchored + chevron trail di lantai
+- [x] Gerbang lintas-lantai — tak pernah menggambar rute palsu (ADR-W007)
+- [x] Warm-up ARCore sebelum localize pertama (ADR-W005)
 - [x] Protokol scan (`docs/SCAN-PROTOCOL.md`)
 - [x] CI/CD (GitHub Actions + Vercel auto-deploy)
 - [~] Alur balik Chrome→Flutter (setengah jadi)
-- [ ] ⛔ **Localize stabil < 1m** (blocker — lihat `docs/KNOWN-ISSUES.md`)
-- [ ] A* Pathfinding (lihat `docs/ROADMAP-PATHFINDING.md`)
+- [ ] 🔬 **Uji 4:** kesejajaran mesh setelah warm-up ARCore (`?mesh=true`)
+- [ ] ⛔ **Localize stabil < 1m di Lantai 1** (blocker — `docs/KNOWN-ISSUES.md`)
+- [ ] navgraph Lantai 1 + node tangga/lift (buka rute lintas-lantai)
+- [ ] Occlusion (ditunda sampai mesh terbukti sejajar)
 - [ ] Proxy token backend
 - [ ] Pindah ke route `/ar` Next.js
 

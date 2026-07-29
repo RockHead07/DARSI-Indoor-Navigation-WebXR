@@ -2,12 +2,24 @@
 
 ---
 
-## ⛔ BLOCKER: Localize Map Jemursari Tidak Stabil
+## ⛔ BLOCKER: Localize Map Jemursari Tidak Stabil (Lantai 1 & lintas-lantai)
 
-**Status:** BELUM TERSELESAIKAN  
+**Status:** BELUM TERSELESAIKAN — **ruang lingkup dipersempit 2026-07-29**  
 **Dampak:** Memblokir navigasi POI map-anchored (titik lompat 5–60 m).  
 **Akar masalah:** Kualitas scan map, bukan WebXR. Koridor RS berulang & mirip
 antar-lantai → VPS false-match.
+
+**Ruang lingkup terkini (berdasarkan Uji 2 & 3):**
+- **Lantai 2 — cukup stabil.** Saat ter-localize benar (`pos.y≈3.8`), `geser` 0.1–0.4 m,
+  `conf` 0.73–0.75. Navigasi map-anchored di Lantai 2 sah dikerjakan di atas ini.
+- **Lantai 1 & lintas-lantai — masih blocker.** Dashboard MultiSet: Lantai 1
+  (Azzara2/BCAD) area paling lemah, success rate keseluruhan 65%.
+- ⚠️ **Stabil ≠ akurat.** `geser` kecil membuktikan *repeatability*, bukan kesejajaran
+  dengan dunia nyata (Uji 2). Kesejajaran hanya bisa dinilai lewat mesh (`?mesh=true`).
+
+**Konsekuensi untuk gerbang CLAUDE.md** ("jangan bangun navigasi map-anchored di atas
+localize belum stabil"): gerbang tetap berlaku untuk Lantai 1 / lintas-lantai; pekerjaan
+map-anchored di Lantai 2 sah dilanjutkan.
 
 **Rencana penanganan (urut):**
 1. Cek Localization Heatmap di dashboard MultiSet → bukti area scan lemah.
@@ -23,33 +35,50 @@ dari client (sejalan ADR-021).
 
 ## Occlusion: Objek AR Terlihat Menembus Tembok Fisik
 
-**Status:** BELUM DIIMPLEMENTASIKAN  
+**Status:** DITUNDA — pernah diimplementasi 2026-07-28, **dicabut ADR-W006** (2026-07-29)  
 **Dampak:** Pilar penanda POI dan panah 3D terlihat di balik tembok fisik (tidak
 ter-occlude oleh geometri dunia nyata).
 
 **Penyebab:** Kamera HP biasa tidak memiliki sensor depth/LiDAR. GPU WebGL
 merender objek AR selalu di atas feed kamera.
 
-**Rencana penanganan (opsi):**
-1. **Depth Masking (Invisible Mesh Occluder):** Manfaatkan mesh scan gedung VPS
-   sebagai occlusion buffer (`colorWrite: false`, `depthWrite: true`). Kamera tetap
-   transparan, tapi objek AR di belakang tembok ter-clip oleh depth buffer.
-2. **Proximity Hiding:** Pilar POI hanya dimunculkan ketika jarak ≤ 3–5m dan dalam
-   koridor yang sama (setelah A* pathfinding diimplementasikan).
+**Kenapa dicabut:** occluder dibangun di atas mesh yang terbukti miring, jadi mengklip
+panah di tempat yang salah — dan karena `colorWrite:false`, penyebabnya tak terlihat.
+Ditambah dua cacat implementasi (occluder tak terpasang di lokalisasi pertama; scope
+menjaring seluruh scene). Rinciannya di `docs/DECISIONS.md` ADR-W006.
+
+**Prasyarat menghidupkan kembali:** mesh terbukti sejajar dengan koridor nyata.
+Setelah itu wajib ikut: pemasangan material **setelah** mesh masuk scene (bukan di
+`onLocalizationSuccess`), dan scope dibatasi ke `meshGroup` SDK saja.
 
 ---
 
-## Navigasi Garis Lurus (Belum A* Pathfinding)
+## Rute Lintas-Lantai Belum Ada
 
-**Status:** PLANNED (`docs/ROADMAP-PATHFINDING.md`)  
-**Dampak:** Panah menunjuk garis lurus ke POI (air distance), bisa menembus dinding
-jika POI ada di koridor/ruangan berbeda.
+**Status:** DIGERBANGI (ADR-W007) — tidak menyesatkan, tapi juga belum memandu  
+**Dampak:** POI di lantai berbeda dari user tidak dinavigasikan. Panah & chevron
+disembunyikan, muncul pesan "Naik/Turun ke Lantai N dulu". Navigasi hidup otomatis
+begitu user tiba di lantai yang benar.
+
+**Penyebab:** `navgraph.json` hanya berisi 3 node di Lantai 2 — tidak ada node Lantai 1,
+tidak ada edge tangga/lift.
+
+**Rencana penanganan (butuh sesi rekam di Jemursari):**
+1. Rekam node koridor Lantai 1 + minimal 1 node tangga/lift per lantai.
+2. Tambah edge antar-lantai di `navgraph.json`.
+3. Segmentasi navigasi sesuai ADR-020 (lift memutus tracking → relokalisasi setelah keluar).
+
+---
+
+## Navigasi Garis Lurus (A* sudah ada, navgraph masih minimal)
+
+**Status:** SEBAGIAN — mesin A* jalan (`solveAStar`), datanya yang kurang  
+**Dampak:** `navgraph.json` baru 3 node / 2 edge di Lantai 2. Di luar cakupan itu, rute
+jatuh ke fallback garis lurus ke POI, yang bisa menembus dinding.
 
 **Rencana penanganan:**
-1. Buat `public/data/navgraph.json` (node koridor + edges).
-2. Implementasi A* pathfinding di `src/main.js`.
-3. Panah mengarah ke node persimpangan berikutnya, bukan langsung ke POI.
-4. Lihat `docs/ROADMAP-PATHFINDING.md` untuk spesifikasi lengkap.
+1. Perluas `public/data/navgraph.json` lewat perekaman lapangan (tombol REKAM POI 📍).
+2. Lihat `docs/ROADMAP-PATHFINDING.md` untuk spesifikasi lengkap.
 
 ---
 
@@ -76,9 +105,11 @@ Terkonfirmasi di iPhone 2026-07-22.
 
 | Keputusan | Status | Tergantung Pada |
 |---|---|---|
-| Localize stabil (< 1m) | ⛔ Blocker | Re-scan map |
+| Localize stabil (< 1m) Lt 1 | ⛔ Blocker | Re-scan map |
+| Kesejajaran mesh (akurasi) | 🔬 Diuji | Warm-up ARCore (ADR-W005) → Uji 4 `?mesh=true` |
+| Occlusion | ⏸ Ditunda | Mesh terbukti sejajar (ADR-W006) |
+| Rute lintas-lantai | ⏸ Digerbangi | Rekam node Lt 1 + tangga/lift (ADR-W007) |
 | Lingkup larangan Unity | Tanya dosen | — |
 | Alur balik Chrome→Flutter | Setengah jadi | Lihat `docs/DEEPLINK-CONTRACT.md` |
-| Mesin A* | Ditunda | navgraph.json + solve-frame |
 | Proxy token backend | Ditunda | Di luar jalur pembuktian tesis |
 | Pindah ke route `/ar` Next.js | Ditunda | WebXR final |
