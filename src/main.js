@@ -3,7 +3,8 @@
 // BUKAN tujuan — cukup: tahu lantai (pos.Y) + panah arah + jarak + "sampai".
 //
 // Mode:
-//   - default              : produk. Kamera bersih, tanpa mesh (ADR-W006).
+//   - default              : produk. Mesh gedung dimuat sebagai occluder; SEMENTARA masih
+//                            terlihat sampai material depth-only dipasang (ADR-W010).
 //   - ?mesh=true           : DIAGNOSTIK. Render mesh gedung VPS — satu-satunya cek AKURASI
 //                            yang kita punya (FIELD-TESTS Uji 2). Occlusion dicabut, jadi
 //                            di mode ini mesh memang sengaja terlihat.
@@ -31,8 +32,12 @@ const ARCORE_WARMUP_MS = 1500;
 // Ambang elevasi map-space pemisah lantai (ADR-W001: Lt1 Y≈−0.5, Lt2 Y≈3.7).
 const floorOf = (mapY) => (mapY >= 1.5 ? 2 : 1);
 
-// Mesh gedung VPS = alat DIAGNOSTIK, bukan fitur produk (ADR-W006). Dibaca sekali saat load
-// karena ThreeAdapter membaca showMesh sekali di constructor.
+// Mesh gedung VPS kini SELALU dimuat (dipakai sebagai occluder). SHOW_MESH tidak lagi
+// menentukan APAKAH mesh dimuat, melainkan BAGAIMANA ia dirender: di ?mesh=true material
+// shader SDK dibiarkan agar kesejajaran bisa dinilai mata; di produksi ia diganti material
+// depth-only. Dibaca sekali saat load karena mode tak bisa berubah di tengah sesi.
+// CATATAN: penggantian material itu belum terpasang, jadi untuk sekarang mesh terlihat di
+// kedua mode. Sengaja dibiarkan unused sampai task occluder mendarat.
 const SHOW_MESH = new URLSearchParams(location.search).has("mesh");
 
 // --- kontrak alur-balik ke CopyCat (Flutter) — lihat docs/DEEPLINK-CONTRACT.md ---
