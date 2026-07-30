@@ -126,8 +126,13 @@ tak terlihat sama sekali.
 
 ### 5.1 Urutan kerja
 
-1. **Verifikasi `relativePose`** lewat `?mapset=true` (sudah ada, tinggal dibuka).
-   Hipotesis: map `order 0` ≈ identitas, map lantai 2 punya geser nyata beberapa meter.
+1. ~~**Verifikasi `relativePose`**~~ — ✅ **SELESAI 2026-07-30 (Uji 5), hipotesis terbukti:**
+   - `MAP_BCADVLIXFSJE` (Lt 1, order 0): `relativePose` = **identitas**.
+   - `MAP_MW1QTZWG1TLG` (Lt 2, order 1): geser `(-0.25, 3.94, 0.59)` + **rotasi 20.89° yaw
+     murni** di sumbu Y. Di ujung koridor 30 m, yaw saja → meleset **11.4 m**.
+
+   Ini menjelaskan "yang hancur selalu lantai 2" (Lt 1 identitas) dan "mesh miring"
+   (yaw 20.89°). Rincian di `docs/FIELD-TESTS.md` Uji 5.
 2. **Terapkan `relativePose` ke mesh.** SDK mengunduh mesh map **tunggal** (vertex di ruang
    map itu sendiri) lalu menerapkan `worldFromMap` (ruang **map-set**) tanpa `relativePose`
    — `relativePose` muncul 0 kali di seluruh dist SDK. Koreksinya: transformasi mesh menjadi

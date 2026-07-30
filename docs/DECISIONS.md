@@ -169,6 +169,23 @@ penyebabnya tak bisa dilihat — panah hilang tanpa penjelasan.
   karena `ThreeAdapter` membaca `mapCodes[0]` untuk memilih mesh lantai.
 
 ### Syarat menghidupkan kembali
+
+> **PEMBARUAN 2026-07-30 — penyebab mesh meleset TERBUKTI & TERUKUR (Uji 5).**
+> SDK mengunduh mesh map **tunggal** (vertex di ruang map itu sendiri) lalu menerapkan
+> `worldFromMap` (ruang **map-set**) **tanpa `relativePose`** — field itu muncul 0 kali di
+> seluruh dist SDK, dan endpoint `mapSetDetailsUrl` yang memuatnya tak pernah dipanggil.
+> Diagnostik `?mapset=true` mengonfirmasi: Lantai 1 (`order 0`) `relativePose`-nya
+> **identitas** — karena itu selalu tampak hampir benar; Lantai 2 punya geser
+> `(-0.25, 3.94, 0.59)` **plus rotasi 20.89° yaw murni** — karena itu "yang hancur selalu
+> lantai 2" dan terlihat *miring*.
+>
+> Syarat "mesh terbukti sejajar" karena itu tinggal satu perubahan: transformasi mesh menjadi
+> **`worldFromMap · relativePose`**. Rencana lengkap di
+> `docs/superpowers/specs/2026-07-30-occlusion-design.md` §5.
+>
+> **Catatan penting:** cacat ini **tidak pernah memengaruhi navigasi**. POI hidup di ruang
+> map-set dan `worldFromMap` memetakannya ke world dengan benar. Yang salah hanya render mesh.
+
 Occlusion baru layak dipasang lagi **setelah mesh terbukti sejajar dengan koridor nyata**.
 Saat itu, wajib ikut dibawa: (a) pemasangan material occluder **setelah** mesh benar-benar
 masuk scene, bukan di `onLocalizationSuccess`; (b) scope dibatasi ke `meshGroup` milik SDK

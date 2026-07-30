@@ -142,7 +142,64 @@ Gerbang pencegahnya dicatat di `CLAUDE.md`.
 
 ### Belum diuji
 
-- `?mesh=true` — kesejajaran mesh setelah warm-up ARCore.
-- `?mapset=true` — pembacaan `relativePose` (uji akar mesh-meleset).
+- `?mesh=true` — kesejajaran mesh setelah koreksi `relativePose` (lihat Uji 5).
 - Gerbang lintas-lantai (pilih POI Lt 1 sambil berdiri di Lt 2).
 - Visibilitas chevron saat HP dipegang setinggi dada (`docs/KNOWN-ISSUES.md`).
+
+---
+
+## Uji 5: 2026-07-30 — Diagnostik map-set (`?mapset=true`, dari laptop)
+
+**Tujuan:** menguji hipotesis bahwa mesh meleset karena SDK tak pernah menerapkan
+`relativePose` tiap map di dalam map-set.
+
+### ✅ AKAR MASALAH TERBUKTI — dan terukur
+
+```
+HTTP 200 — 2 map
+
+MAP_BCADVLIXFSJE  "Azzara2"  (order 0, Lantai 1)
+  pos: x=0  y=0  z=0
+  rot: 0, 0, 0, 1
+  GESER: 0.000 m          ← IDENTITAS (jangkar map-set)
+
+MAP_MW1QTZWG1TLG  "Azzara3"  (order 1, Lantai 2)
+  pos: x=-0.25  y=3.94  z=0.59
+  rot: 0, -0.18128906133681114, 0, 0.9834298532379511
+  GESER: 3.992 m
+```
+
+Dekomposisi kuaternion Lantai 2: **rotasi 20.89° yaw MURNI** di sumbu Y (`qx=0, qz=0`;
+`sin(half)=0.18129` cocok persis dengan `|qy|`). Geser Y 3.94 m ≈ tinggi satu lantai
+(ΔY localize terukur 4.2 m). Geser XZ 0.64 m.
+
+**Dampak yaw saja:** di ujung koridor 30 m → meleset **11.4 m**.
+
+### Yang terjelaskan sekaligus
+
+| Amatan lapangan | Sebab |
+|---|---|
+| "yang hancur itu selalu lantai 2" | Lantai 1 `relativePose`-nya identitas — tak ada yang hilang |
+| "mesh miring" | Yaw 20.89° |
+| "mesh melayang" | Geser Y 3.94 m |
+| Dashboard MultiSet overlap sempurna | Dashboard menerapkan `relativePose` |
+| App native MultiSet akurat | Ia juga menerapkannya |
+| `isRightHanded:false` justru merusak (Tahap A) | Tombol tidak relevan |
+| `fx=fy=898` dicurigai | Intrinsics ternyata wajar — pengalih perhatian |
+
+### ⚠️ Koreksi terhadap kesimpulan Uji 2
+
+Uji 2 menyimpulkan **"repeatable ≠ accurate"** berdasarkan mesh yang tampak melayang.
+Kesimpulan itu **diambil dengan penggaris yang bengkok**: mesh memang salah dirender, bukan
+lokalisasinya yang tidak akurat. POI hidup di ruang **map-set** dan `worldFromMap` memetakan
+map-set → world dengan benar, sehingga **navigasi tidak pernah terpengaruh cacat ini** —
+hanya mesh, yang hidup di ruang map masing-masing.
+
+Akurasi lokalisasi Lantai 2 **belum pernah benar-benar diukur** dan perlu diuji ulang
+setelah koreksi `relativePose` dipasang.
+
+### Tindak lanjut
+
+Prasyarat ADR-W006 untuk menghidupkan occlusion (**"mesh terbukti sejajar"**) kini tinggal
+satu perubahan kode: transformasi mesh menjadi `worldFromMap · relativePose`. Lihat Tahap 2
+di `docs/superpowers/specs/2026-07-30-occlusion-design.md`.

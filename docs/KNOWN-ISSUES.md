@@ -14,8 +14,12 @@ antar-lantai → VPS false-match.
   `conf` 0.73–0.75. Navigasi map-anchored di Lantai 2 sah dikerjakan di atas ini.
 - **Lantai 1 & lintas-lantai — masih blocker.** Dashboard MultiSet: Lantai 1
   (Azzara2/BCAD) area paling lemah, success rate keseluruhan 65%.
-- ⚠️ **Stabil ≠ akurat.** `geser` kecil membuktikan *repeatability*, bukan kesejajaran
-  dengan dunia nyata (Uji 2). Kesejajaran hanya bisa dinilai lewat mesh (`?mesh=true`).
+- ⚠️ **Stabil ≠ akurat** — tapi **akurasi sebenarnya belum pernah terukur.** `geser` kecil
+  hanya membuktikan *repeatability*. Uji 2 menyimpulkan "repeatable ≠ accurate" dari mesh
+  yang tampak melayang, **namun Uji 5 membuktikan mesh-nya sendiri yang salah dirender**
+  (SDK tak menerapkan `relativePose`: Lt 2 meleset 3.99 m + yaw 20.89°). Jadi kesimpulan itu
+  diambil dengan penggaris bengkok. Mesh baru sah jadi alat ukur **setelah** koreksi
+  `relativePose` dipasang.
 
 **Konsekuensi untuk gerbang CLAUDE.md** ("jangan bangun navigasi map-anchored di atas
 localize belum stabil"): gerbang tetap berlaku untuk Lantai 1 / lintas-lantai; pekerjaan
