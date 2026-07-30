@@ -99,6 +99,31 @@ if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.
 // sebesar relativePose. Hipotesis: Lt 1 = jangkar (≈identitas, karena itu tampak hampir
 // benar), Lt 2 punya geser nyata (karena itu "yang hancur selalu lantai 2").
 // Sengaja dijalankan SEBELUM gerbang WebXR supaya bisa dibuka di laptop — tak butuh AR.
+// Ambil relativePose tiap map di dalam map-set. SDK punya endpoint ini di DEFAULT_ENDPOINTS
+// (`mapSetDetailsUrl`) tapi TIDAK PERNAH memanggilnya — `relativePose` 0 kemunculan di
+// seluruh dist. Tanpa ini mesh lantai 2 meleset 3.99 m + yaw 20.89 derajat (Uji 5).
+// Kunci Map = `_id` map, karena itulah yang dipakai SDK sebagai `name` objek mesh di scene.
+async function fetchMapSetPoses(client) {
+  const out = new Map();
+  try {
+    const res = await fetch(`https://api.multiset.ai/v1/vps/map-set/${MAPSET}`, {
+      headers: { Authorization: `Bearer ${client.token}` },
+    });
+    if (!res.ok) return out;
+    const body = await res.json();
+    for (const m of body?.mapSet?.mapSetData ?? body?.mapSetData ?? []) {
+      const p = m.relativePose?.position, q = m.relativePose?.rotation, id = m.map?._id;
+      if (!id || !p || !q) continue;
+      out.set(id, {
+        position: new THREE.Vector3(p.x, p.y, p.z),
+        // API memakai qx/qy/qz/qw, BUKAN x/y/z/w. Salah baca = identitas diam-diam.
+        quaternion: new THREE.Quaternion(q.qx, q.qy, q.qz, q.qw),
+      });
+    }
+  } catch { /* jaringan gagal → Map kosong → mesh dibiarkan seperti perilaku SDK */ }
+  return out;
+}
+
 async function mapsetDiagnostic() {
   const client = new MultisetClient({
     clientId: ID, clientSecret: SECRET, mapType: "map-set", code: MAPSET,
@@ -196,6 +221,12 @@ async function main() {
   });
   try { await client.authorize(); state.auth = "OK"; }
   catch (e) { return fail(`authorize gagal: ${e.message} (cek CORS domain di dashboard MultiSet)`); }
+  draw();
+
+  // relativePose dibutuhkan SEBELUM mesh pertama dimuat (Task 2). Gagal ambil = Map kosong,
+  // mesh berperilaku seperti bawaan SDK (meleset) — bukan crash.
+  const mapSetPoses = await fetchMapSetPoses(client);
+  state.auth = `OK (relativePose: ${mapSetPoses.size} map)`;
   draw();
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
