@@ -183,11 +183,8 @@ async function main() {
   }
 
   // --- UI Elements ---
-  const panelStandby = document.getElementById("panel-standby");
-  const panelActive = document.getElementById("panel-active");
+  const btnAr = document.getElementById("btn-ar");
   const poiSelect = document.getElementById("poi-select");
-  const btnStartNav = document.getElementById("btn-start-nav");
-  const btnStopNav = document.getElementById("btn-stop-nav");
 
   // Populate POI Dropdown
   const allPois = await loadAllPois();
@@ -214,8 +211,6 @@ async function main() {
     } else {
       state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
       draw();
-      panelStandby?.classList.add("hidden");
-      panelActive?.classList.remove("hidden");
     }
   }
 
@@ -276,13 +271,18 @@ async function main() {
     bgLocalizationInterval: 10,       // 10s (min) — auto-relocalize lebih sering → pulih cepat dari drift/pose-loss
     confidenceCheck: true,            // threshold jatuh ke default SDK 0.5; conf terbukti bukan filter andal (FIELD-TESTS Uji 1)
     onSessionStart: () => {
-      renderer.domElement.style.display = "none"; state.session = "AKTIF"; draw();
+      renderer.domElement.style.display = "none"; state.session = "AKTIF"; syncArButton(true); draw();
       setTimeout(() => {
         if (!adapter.isActive()) return;             // user keburu menutup sesi
         adapter.localizeFrame().catch((e) => { state.last = `localize awal gagal: ${e?.message ?? e}`; draw(); });
       }, ARCORE_WARMUP_MS);
     },
-    onSessionEnd:   () => { renderer.domElement.style.display = "block"; state.session = "berhenti (sesi WebXR diakhiri browser/user)"; draw(); },
+    onSessionEnd: () => {
+      renderer.domElement.style.display = "block";
+      state.session = "berhenti (sesi WebXR diakhiri browser/user)";
+      syncArButton(false);   // sesi bisa berakhir tanpa lewat tombol (back, focus loss) — label ikut jujur
+      draw();
+    },
     // DIAGNOSTIK: intrinsics yang BENAR-BENAR dikirim ke VPS. App native pakai kalibrasi
     // kamera asli; jalur web menurunkan dari proyeksi WebXR. Kalau fx≠fy jauh, atau px/py
     // bukan ~½ width/height, atau fx tak masuk akal utk focal → itu sumber offset sistematis.
@@ -381,15 +381,7 @@ async function main() {
   let lastOriginWorld = null;
 
   // --- navigasi MAP-anchored (uji inti) ---
-  let destMap = null;              // tujuan dalam KOORDINAT MAP
-  let lastWorldFromMap = null;     // matrix localize terakhir → re-anchor destMap tiap localize
-  function anchorDest() {          // map-coord → world via worldFromMap; INILAH uji map-anchoring
-    if (!destMap || !lastWorldFromMap) return;
-    destination = destMap.clone().applyMatrix4(lastWorldFromMap);
-    destMarker.position.copy(destination);
-    destMarker.position.y = destination.y - EYE_HEIGHT;
-    destMarker.visible = true;
-  }
+  let lastWorldFromMap = null;     // matrix localize terakhir → re-anchor tujuan tiap localize
 
   // --- NAVGRAPH & A* PATHFINDING ENGINE ---
   let navGraph = null;
@@ -803,58 +795,48 @@ async function main() {
       lastOriginWorld = now;
       lastWorldFromMap = worldFromMap;
       if (activePoi) navigateToActivePoi(worldFromMap);   // re-anchor & update rute tiap localize
-      else if (destMap) anchorDest();                     // Developer mode: re-anchor destMap
       draw();
     },
   });
   adapter.initialize();               // pasang tombol START AR
 
-  // --- Event Listeners UI Navigasi ---
-  if (btnStartNav && poiSelect) {
-    btnStartNav.onclick = () => {
-      const selectedId = poiSelect.value;
-      if (!selectedId) {
-        state.nav = "Pilih POI tujuan terlebih dahulu!";
-        draw();
-        return;
-      }
-      const target = allPois.find((p) => p.id === selectedId);
-      if (!target) return;
+  // --- Kontrol UI: DUA urusan, DUA kontrol ---
+  // Sebelumnya AR hanya bisa dinyalakan lewat tombol "Navigasi", jadi menyalakan kamera
+  // MEWAJIBKAN memilih tujuan. Padahal dua pekerjaan lapangan paling sering — menilai
+  // kesejajaran mesh dan merekam navgraph — butuh AR menyala TANPA tujuan apa pun.
 
-      activePoi = target;
-      activeWaypointsMap = []; currentWaypointIndex = 0;   // tujuan baru → paksa hitung ulang rute
-      state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
-      panelStandby?.classList.add("hidden");
-      panelActive?.classList.remove("hidden");
-
-      if (lastWorldFromMap) navigateToActivePoi(lastWorldFromMap);
-      draw();
-
-      // Pemicu 1-Tap AR: Mulai sesi WebXR AR jika belum aktif
-      if (!adapter.isActive()) {
-        void adapter.startSession();
-      }
+  // btn-ar: hanya mengurus kamera AR.
+  if (btnAr) {
+    btnAr.onclick = () => {
+      if (adapter.isActive()) adapter.stopSession();
+      else void adapter.startSession();   // WAJIB dari gesture user (syarat WebXR)
     };
   }
+  // Label & warna diturunkan dari keadaan sesi yang sebenarnya, bukan ditebak saat diklik —
+  // sesi juga bisa berakhir sendiri (tombol back, focus loss), dan tombol harus ikut jujur.
+  function syncArButton(aktif) {
+    if (!btnAr) return;
+    btnAr.textContent = aktif ? "HENTIKAN AR" : "MULAI AR";
+    btnAr.classList.toggle("aktif", aktif);
+  }
 
-  if (btnStopNav) {
-    btnStopNav.onclick = () => {
-      activePoi = null;
-      destMap = null;
+  // poiSelect: hanya mengurus tujuan. Bisa diganti kapan saja tanpa mematikan AR;
+  // pilih opsi kosong untuk berhenti menavigasi tapi tetap di dalam sesi AR.
+  if (poiSelect) {
+    poiSelect.onchange = () => {
+      activeWaypointsMap = []; currentWaypointIndex = 0;   // tujuan berubah → hitung ulang rute
       destination = null;
-      activeWaypointsMap = []; currentWaypointIndex = 0;
       destMarker.visible = false;
       floorTrailGroup.visible = false;
 
-      state.nav = "Navigasi dihentikan. Pilih tujuan di bawah.";
-      panelActive?.classList.add("hidden");
-      panelStandby?.classList.remove("hidden");
-      draw();
-
-      // Hentikan sesi WebXR AR jika sedang aktif
-      if (adapter.isActive()) {
-        adapter.stopSession();
+      activePoi = allPois.find((p) => p.id === poiSelect.value) ?? null;
+      if (!activePoi) {
+        state.nav = "Tanpa tujuan — AR jalan untuk diagnostik/rekam.";
+      } else {
+        state.nav = `Menuju ${activePoi.name} — arahkan kamera untuk lokalisasi...`;
+        if (lastWorldFromMap) navigateToActivePoi(lastWorldFromMap);
       }
+      draw();
     };
   }
 
@@ -862,14 +844,16 @@ async function main() {
   const isAdminUrl = location.search.includes("admin=true") || location.search.includes("debug=true");
   const devButtonsGroup = [];
 
-  const mkBtn = (text, bg, fg, bottom, fn) => {
+  // Alat developer masuk ke grid #admin-tools DI DALAM panel. Versi lama memasangnya sebagai
+  // tombol melayang `position:fixed` bertumpuk di 24/80/136/…/416 px, sehingga dua tombol
+  // terbawah menimpa panel navigasi dan layar penuh tombol tanpa hierarki.
+  const adminTools = document.getElementById("admin-tools");
+  const mkBtn = (text, bg, fn) => {
     const b = document.createElement("button");
     b.textContent = text;
-    b.style.cssText = `position:fixed;left:16px;bottom:${bottom}px;z-index:20;` +
-      `padding:11px 16px;font:600 14px system-ui;color:${fg};background:${bg};border:0;border-radius:8px;display:none;`;
+    b.style.background = bg;
     b.onclick = fn;
-    document.body.appendChild(b);
-    devButtonsGroup.push(b);
+    adminTools?.appendChild(b);
     return b;
   };
 
@@ -877,37 +861,18 @@ async function main() {
     const isDebug = toggleDebugMode ? toggleDebugMode.checked : false;
     allPoiMarkersGroup.visible = isDebug;
     navGraphLinesGroup.visible = isDebug;
-    devButtonsGroup.forEach((b) => {
-      b.style.display = isDebug ? "block" : "none";
-    });
+    adminTools?.classList.toggle("hidden", !isDebug);
   }
 
-  // Tombol-tombol developer & diagnostik
-  mkBtn("SET TUJUAN", "#ffcc00", "#000", 24, () => {
-    destMap = null;
-    const wp = new THREE.Vector3(); camera.getWorldPosition(wp);
-    destination = wp.clone();
-    destMarker.position.copy(wp);
-    destMarker.position.y = wp.y - EYE_HEIGHT;
-    destMarker.visible = true;
-    state.nav = "tujuan(world) diset — menjauh lalu kembali";
-    draw();
-  });
+  // SET TUJUAN & TUJUAN (MAP) DIHAPUS: sisa eksperimen Milestone 3 yang menjawab "apakah
+  // map-anchoring cukup akurat" — pertanyaan yang sudah digantikan navigasi POI + A*.
 
-  mkBtn("TUJUAN (MAP)", "#a855f7", "#fff", 192, () => {
-    if (!lastMapPos) { state.nav = "belum ada localize — arahkan sampai poseFound dulu"; draw(); return; }
-    destMap = lastMapPos.clone();
-    anchorDest();
-    state.nav = "tujuan(MAP) diset — menjauh, cek panah balik ke titik benar?";
-    draw();
-  });
-
-  mkBtn("RELOCALIZE", "#0088ff", "#fff", 80, () => {
+  mkBtn("RELOCALIZE", "#0088ff", () => {
     state.last = "relocalize…"; draw();
     adapter.localizeFrame().catch((e) => { state.last = `relocalize gagal: ${e?.message ?? e}`; draw(); });
   });
 
-  mkBtn("REKAM POI 📍", "#f97316", "#fff", 136, () => {
+  mkBtn("REKAM POI 📍", "#f97316", () => {
     const here = currentMapPos();   // posisi LIVE — lastMapPos basi hingga ~10 dtk
     if (!here) {
       state.nav = "Belum ada localize — arahkan kamera ke sekeliling dulu.";
@@ -939,7 +904,7 @@ async function main() {
   // membuat node baru, kalau kita berdiri hampir di tempat yang sama.
   const SNAP_M = 1.5;
 
-  mkBtn("REKAM NODE ⛓️", "#14b8a6", "#fff", 304, () => {
+  mkBtn("REKAM NODE ⛓️", "#14b8a6", () => {
     const here = currentMapPos();   // posisi LIVE, bukan lastMapPos yang basi ~10 dtk
     if (!here) { state.nav = "Belum ada localize — arahkan kamera ke sekeliling dulu."; draw(); return; }
     const p = {
@@ -969,14 +934,14 @@ async function main() {
     draw();
   });
 
-  mkBtn("PUTUS RANTAI ✂️", "#64748b", "#fff", 360, () => {
+  mkBtn("PUTUS RANTAI ✂️", "#64748b", () => {
     rec.lastId = null;   // tap berikutnya memulai cabang baru, tak menyambung ke node terakhir
     state.nav = `✂️ rantai diputus — tap berikutnya jadi awal cabang baru.\n` +
                 `total: ${rec.nodes.length} node, ${rec.edges.length} edge`;
     draw();
   });
 
-  mkBtn("EXPORT NAVGRAPH 💾", "#e11d48", "#fff", 416, async () => {
+  mkBtn("EXPORT NAVGRAPH 💾", "#e11d48", async () => {
     if (rec.nodes.length === 0) { state.nav = "Belum ada node direkam."; draw(); return; }
     // distance TIDAK diekspor — diturunkan saat loadNavGraph (ADR-021).
     const json = JSON.stringify({ nodes: rec.nodes, edges: rec.edges }, null, 2);
@@ -991,11 +956,17 @@ async function main() {
     draw();
   });
 
-  mkBtn("SELESAI ✓", "#22c55e", "#fff", 248, () => {
-    const arrived = state.nav.includes("SAMPAI");
-    if (session.isActive()) session.stopSession();
-    returnToApp({ arrived: String(arrived) });
-  });
+  // SELESAI ✓ BUKAN alat admin — ia satu-satunya jalan kembali ke MyRSIy lewat deep link.
+  // Sebelumnya dibuat lewat mkBtn sehingga hanya muncul saat Mode Admin menyala, artinya di
+  // produksi pengguna tidak punya cara keluar sama sekali. Kini tombol tetap di panel.
+  const btnDone = document.getElementById("btn-done");
+  if (btnDone) {
+    btnDone.onclick = () => {
+      const arrived = state.nav.includes("SAMPAI");
+      if (adapter.isActive()) adapter.stopSession();
+      returnToApp({ arrived: String(arrived) });
+    };
+  }
 
   // Hubungkan event listener Slider Switch Mode Admin
   if (toggleDebugMode) {

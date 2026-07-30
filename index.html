@@ -63,19 +63,38 @@
       justify-content: center;
       gap: 6px;
     }
-    #btn-start-nav {
+    #btn-ar {
       background: linear-gradient(135deg, #10b981, #059669);
+      min-width: 116px;
     }
-    #btn-start-nav:active {
-      transform: scale(0.96);
-    }
-    #btn-stop-nav {
+    /* Saat sesi AR aktif tombolnya jadi merah — warnanya sendiri yang memberi tahu keadaan,
+       bukan cuma labelnya. */
+    #btn-ar.aktif {
       background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    #btn-ar:active, #btn-done:active { transform: scale(0.96); }
+    #btn-done {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       width: 100%;
+      font-weight: 500;
     }
-    #btn-stop-nav:active {
-      transform: scale(0.96);
+
+    /* Alat developer: grid rapat DI DALAM panel, tidak melayang menimpa apa pun. */
+    #admin-tools {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
     }
+    #admin-tools button {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 8px;
+      font: 600 12px system-ui;
+      color: #fff;
+      cursor: pointer;
+    }
+    #admin-tools button:active { transform: scale(0.96); }
 
     /* Toggle Switch Slider (Mode Admin / Developer) */
     .switch-row {
@@ -114,28 +133,33 @@
 <body>
   <div id="hud">DARSI WebXR — memuat…</div>
 
+  <!--
+    Dua kontrol, dua urusan berbeda:
+      #btn-ar     → kamera AR menyala/mati. Tidak butuh tujuan.
+      #poi-select → tujuan. Bisa diganti kapan saja tanpa mematikan AR; pilih opsi
+                    kosong untuk berhenti menavigasi.
+    Alat developer TIDAK melayang di atas panel ini — semuanya masuk #admin-tools.
+  -->
   <div id="nav-controls">
-    <!-- Admin Debug Slider Switch -->
+    <div class="panel-row">
+      <select id="poi-select">
+        <option value="">-- Tanpa tujuan (AR saja) --</option>
+      </select>
+      <button id="btn-ar" class="btn-action">MULAI AR</button>
+    </div>
+
+    <!-- Jalan kembali ke MyRSIy (deep link). WAJIB terlihat di produksi, bukan alat admin. -->
+    <button id="btn-done" class="btn-action">SELESAI ✓</button>
+
     <div class="switch-row">
-      <span>🛠️ Mode Admin (POI Overlay & Tools)</span>
+      <span>🛠️ Mode Admin</span>
       <label class="switch">
         <input type="checkbox" id="toggle-debug-mode">
         <span class="slider"></span>
       </label>
     </div>
 
-    <!-- Panel Standby: Pilihan POI -->
-    <div id="panel-standby" class="panel-row">
-      <select id="poi-select">
-        <option value="">-- Pilih Tujuan POI --</option>
-      </select>
-      <button id="btn-start-nav" class="btn-action">Navigasi 🚀</button>
-    </div>
-
-    <!-- Panel Active: Status & Stop Navigation -->
-    <div id="panel-active" class="panel-row hidden">
-      <button id="btn-stop-nav" class="btn-action">🛑 Hentikan Navigasi</button>
-    </div>
+    <div id="admin-tools" class="hidden"></div>
   </div>
 
   <script type="module" src="/src/main.js"></script>
