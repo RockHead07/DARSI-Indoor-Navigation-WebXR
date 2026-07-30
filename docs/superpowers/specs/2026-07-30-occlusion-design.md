@@ -1,7 +1,21 @@
 # Desain: Occlusion & Keterbacaan Objek AR Jauh
 
 **Tanggal:** 2026-07-30
-**Status:** disetujui — implementasi bertahap (Tahap 1 lebih dulu)
+**Status:** disetujui — implementasi bertahap
+
+> **Urutan direvisi 2026-07-30, sesudah Uji 5.** Semula Tahap 1 (Horizon) dikerjakan lebih
+> dulu karena Tahap 2 diblokir verifikasi `relativePose`. Verifikasi itu **sudah selesai dan
+> terbukti** (lihat §5.1), sehingga Tahap 2 turun drastis biayanya — tinggal mengalikan
+> transformasi mesh dengan `relativePose`.
+>
+> **Urutan kerja sekarang: Tahap 2 lebih dulu, lalu Tahap 1.**
+>
+> Alasannya bukan sekadar occlusion. Begitu mesh sejajar, project ini **punya alat ukur
+> akurasi yang sah untuk pertama kalinya** — menjawab pertanyaan yang menggantung sejak Uji 2:
+> apakah lokalisasi Lantai 2 memang akurat, atau meleset. Selama ini tak pernah terjawab
+> karena penggarisnya sendiri bengkok.
+>
+> Tahap 1 tidak bergantung apa pun dan nilainya tidak berkurang; ia menyusul.
 
 ---
 
