@@ -54,14 +54,18 @@ ter-occlude oleh geometri dunia nyata).
 **Penyebab:** Kamera HP biasa tidak memiliki sensor depth/LiDAR. GPU WebGL
 merender objek AR selalu di atas feed kamera.
 
-**Kenapa dicabut:** occluder dibangun di atas mesh yang terbukti miring, jadi mengklip
-panah di tempat yang salah — dan karena `colorWrite:false`, penyebabnya tak terlihat.
-Ditambah dua cacat implementasi (occluder tak terpasang di lokalisasi pertama; scope
-menjaring seluruh scene). Rinciannya di `docs/DECISIONS.md` ADR-W006.
+**Kenapa dicabut (riwayat, ADR-W006, 2026-07-29):** occluder saat itu dibangun di atas mesh
+yang terbukti miring, jadi mengklip panah di tempat yang salah — dan karena `colorWrite:false`,
+penyebabnya tak terlihat. Ditambah dua cacat implementasi: occluder tak terpasang di
+lokalisasi pertama (material dipasang sebelum mesh ada di scene), dan scope menjaring seluruh
+scene, bukan cuma `meshGroup`. Akar masalah "mesh miring" itu sendiri **sudah diperbaiki** oleh
+koreksi `relativePose` (ADR-W010, 2026-07-30) — tapi dua cacat implementasi di atas tetap
+dicatat di sini karena occluder berikutnya wajib menghindarinya.
 
-**Prasyarat menghidupkan kembali:** mesh terbukti sejajar dengan koridor nyata.
-Setelah itu wajib ikut: pemasangan material **setelah** mesh masuk scene (bukan di
-`onLocalizationSuccess`), dan scope dibatasi ke `meshGroup` SDK saja.
+**Prasyarat menghidupkan kembali:** mesh terbukti sejajar dengan koridor nyata di lapangan
+(Lantai 1 **dan** Lantai 2, lewat `?mesh=true` — lihat ADR-W010). Setelah itu wajib ikut:
+pemasangan material **setelah** mesh masuk scene (bukan di `onLocalizationSuccess`), dan scope
+dibatasi ke `meshGroup` SDK saja.
 
 ---
 
@@ -140,8 +144,8 @@ Terkonfirmasi di iPhone 2026-07-22.
 | Keputusan | Status | Tergantung Pada |
 |---|---|---|
 | Localize stabil (< 1m) Lt 1 | ⛔ Blocker | Re-scan map |
-| Kesejajaran mesh (akurasi) | 🔬 Diuji | Warm-up ARCore (ADR-W005) → Uji 4 `?mesh=true` |
-| Occlusion | ⏸ Ditunda | Mesh terbukti sejajar (ADR-W006) |
+| Kesejajaran mesh (akurasi) | ⏳ Diperbaiki, verifikasi lapangan tersisa | Penyebab ditemukan & diperbaiki (Uji 5 + koreksi `relativePose`, ADR-W010) → tersisa konfirmasi lapangan di Lt 1 & Lt 2 |
+| Occlusion | ⏸ Ditunda | Gerbang lapangan Lt 1 & Lt 2 (ADR-W010) |
 | Rute lintas-lantai | ⏸ Digerbangi | Rekam node Lt 1 + tangga/lift (ADR-W007) |
 | Lingkup larangan Unity | Tanya dosen | — |
 | Alur balik Chrome→Flutter | Setengah jadi | Lihat `docs/DEEPLINK-CONTRACT.md` |
