@@ -10,7 +10,8 @@
 
 ## Global Constraints
 
-- **Satu file kode:** semua perubahan di `src/main.js`. Repo ini lab spike, bukan app modular.
+- **Kode dibatasi ke `src/main.js` + `src/horizon.js`.** Repo ini lab spike, bukan app modular — jangan memecah lebih jauh. **Pengecualian tercatat (keputusan pemilik, 2026-07-30):** `clipPathToHorizon` tinggal di `src/horizon.js` karena `main.js` menyentuh `document` saat diimpor sehingga tak bisa diimpor skrip Node. Memisahkannya membuat cek otomatis menguji kode yang benar-benar dijalankan browser, dan lebih sedikit mesin daripada mengekstrak lewat regex.
+- **`adapter.world.getMeshGroup()` menembus field `private` SDK — DITERIMA (keputusan pemilik, 2026-07-30).** `private` hanya berlaku compile-time di TypeScript; nama properti selamat dari minifikasi. Tidak ada alternatif bersih: SDK tak mengekspos accessor apa pun dan `meshGroup` anonim di scene. Versi `@multisetai/vps` dikunci di `package.json`; risikonya dicatat di ADR-W010 agar upgrade SDK memicu pengecekan ulang. **Bukan temuan review.**
 - **Commit sebagai pemilik:** `git -c user.name="Bagus Insan Pradana" -c user.email="dana.bagus07@gmail.com" commit --no-gpg-sign`. **DILARANG** menambahkan `Co-Authored-By`.
 - **DILARANG `git push`** tanpa "ya" eksplisit dari pemilik.
 - **Kebijakan commit repo:** jangan spam commit. Commit hanya di batas task sesuai plan ini.
@@ -396,12 +397,13 @@ Deploy, lalu di Lantai 2 tanpa query param: pilih POI di balik tembok. Pilarnya 
 ## Task 4: `clipPathToHorizon` + cek otomatis
 
 **Files:**
+- Create: `src/horizon.js`
 - Create: `tools/check-horizon.mjs`
-- Modify: `src/main.js` — tambah `clipPathToHorizon` dan konstanta horizon
+- Modify: `src/main.js` — import `clipPathToHorizon`, tambah konstanta horizon
 
 **Interfaces:**
-- Produces: `function clipPathToHorizon(points, horizonM) → Array<{x,y,z}>` — fungsi murni. Memotong polyline berdasarkan **panjang lintasan terakumulasi** dari titik pertama. Titik potong diinterpolasi tepat di batas. `points` = array objek ber-field `x`,`y`,`z` (kompatibel dengan `THREE.Vector3`). Mengembalikan array baru; tidak memutasi input.
-- Produces: `HORIZON_M`, `PILAR_M` — konstanta modul.
+- Produces: `export function clipPathToHorizon(points, horizonM) → Array<{x,y,z}>` di `src/horizon.js` — fungsi murni. Memotong polyline berdasarkan **panjang lintasan terakumulasi** dari titik pertama. Titik potong diinterpolasi tepat di batas. `points` = array objek ber-field `x`,`y`,`z` (kompatibel dengan `THREE.Vector3`). Mengembalikan array baru; tidak memutasi input.
+- Produces: `HORIZON_M`, `PILAR_M` — konstanta modul di `src/main.js`.
 
 - [ ] **Step 1: Tulis cek yang gagal**
 
@@ -410,16 +412,9 @@ Buat `tools/check-horizon.mjs`:
 ```js
 // Cek clipPathToHorizon. Repo ini tak punya framework test (lihat Global Constraints),
 // jadi ini skrip Node polos: `node tools/check-horizon.mjs`.
+// Mengimpor modul yang SAMA dengan yang dipakai browser — bukan salinan.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-
-// main.js adalah modul browser (mengakses `document` saat diimpor), jadi fungsi murni ini
-// diekstrak lewat regex alih-alih diimpor. Rapuh secara sengaja: kalau tanda tangan fungsi
-// berubah, cek ini gagal keras dan memaksa cek ini ikut diperbarui.
-const src = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
-const m = src.match(/function clipPathToHorizon[\s\S]*?\n\}/);
-assert.ok(m, "clipPathToHorizon tidak ditemukan di src/main.js");
-const clipPathToHorizon = new Function(`${m[0]}; return clipPathToHorizon;`)();
+import { clipPathToHorizon } from "../src/horizon.js";
 
 const P = (x, z) => ({ x, y: 0, z });
 const len = (pts) => pts.slice(1).reduce((s, p, i) =>
@@ -460,28 +455,22 @@ console.log("OK — clipPathToHorizon lolos 6 kelompok cek.");
 - [ ] **Step 2: Jalankan cek untuk memastikan GAGAL**
 
 Run: `node tools/check-horizon.mjs`
-Expected: FAIL — `AssertionError: clipPathToHorizon tidak ditemukan di src/main.js`
+Expected: FAIL — `ERR_MODULE_NOT_FOUND` untuk `../src/horizon.js`
 
-- [ ] **Step 3: Tulis implementasi minimal**
+- [ ] **Step 3a: Tulis `src/horizon.js`**
 
-Di `src/main.js`, sisipkan tepat setelah baris 36 (`const SHOW_MESH = ...`):
+Buat file baru `src/horizon.js`:
 
 ```js
-// Horizon visibilitas (ADR baru, spec 2026-07-30). Angka bisa disetel di lapangan tanpa
-// deploy ulang — sejarah repo ini menunjukkan konstanta spasial selalu perlu disetel setelah
-// dicoba (EYE_HEIGHT baru ketahuan salah setelah pilar tenggelam ter-deploy).
-const numParam = (nama, fallback) => {
-  const v = parseFloat(new URLSearchParams(location.search).get(nama));
-  return Number.isFinite(v) && v > 0 ? v : fallback;
-};
-const HORIZON_M = numParam("horizon", 8);   // panjang jejak yang digambar
-const PILAR_M = numParam("pilar", 12);      // jarak pilar tujuan mulai tampak
+// Fungsi murni horizon visibilitas. Sengaja dipisah dari main.js: main.js menyentuh
+// `document` saat diimpor sehingga tak bisa diimpor skrip Node, dan memisahkannya membuat
+// tools/check-horizon.mjs menguji kode yang BENAR-BENAR dijalankan browser — bukan salinan.
 
 // Potong polyline berdasarkan PANJANG LINTASAN terakumulasi, bukan jarak lurus. Disengaja:
 // kalau jalur membelok di 6 m, user tetap melihat sampai tikungan dan sedikit setelahnya —
 // justru itu yang memberi tahu "belok di sini". Titik potong diinterpolasi tepat di batas
 // agar ujung jejak tidak berkedip saat user berjalan. Fungsi murni: tidak memutasi masukan.
-function clipPathToHorizon(points, horizonM) {
+export function clipPathToHorizon(points, horizonM) {
   if (points.length < 2) return points.slice();
   const out = [points[0]];
   let sisa = horizonM;
@@ -501,20 +490,51 @@ function clipPathToHorizon(points, horizonM) {
 }
 ```
 
-- [ ] **Step 4: Jalankan cek untuk memastikan LOLOS**
+- [ ] **Step 3b: Jalankan cek untuk memastikan LOLOS**
 
 Run: `node tools/check-horizon.mjs`
 Expected: `OK — clipPathToHorizon lolos 6 kelompok cek.`
 
-- [ ] **Step 5: Verifikasi build**
+- [ ] **Step 3c: Import ke `src/main.js` dan tambah konstanta**
+
+Cari baris import terakhir di `src/main.js`:
+
+```js
+import { ThreeAdapter } from "@multisetai/vps/three";
+```
+
+Tambahkan tepat di bawahnya:
+
+```js
+import { clipPathToHorizon } from "./horizon.js";
+```
+
+Lalu sisipkan tepat setelah baris `const SHOW_MESH = ...`:
+
+```js
+// Horizon visibilitas (spec 2026-07-30). Angka bisa disetel di lapangan tanpa deploy ulang —
+// sejarah repo ini menunjukkan konstanta spasial selalu perlu disetel setelah dicoba
+// (EYE_HEIGHT baru ketahuan salah setelah pilar tenggelam ter-deploy).
+const numParam = (nama, fallback) => {
+  const v = parseFloat(new URLSearchParams(location.search).get(nama));
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+};
+const HORIZON_M = numParam("horizon", 8);   // panjang jejak yang digambar (meter, sepanjang lintasan)
+const PILAR_M = numParam("pilar", 12);      // jarak pilar tujuan mulai tampak (meter, horizontal)
+```
+
+- [ ] **Step 4: Verifikasi build**
 
 Run: `npx vite build`
 Expected: `✓ built in <N>s`, tanpa baris `error`.
 
-- [ ] **Step 6: Commit**
+Build wajib lolos di sini: ia membuktikan Vite berhasil me-resolve `./horizon.js`.
+Kalau gagal `Failed to resolve import`, periksa ekstensi `.js` pada path import.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/main.js tools/check-horizon.mjs
+git add src/main.js src/horizon.js tools/check-horizon.mjs
 git -c user.name="Bagus Insan Pradana" -c user.email="dana.bagus07@gmail.com" commit --no-gpg-sign -m "clipPathToHorizon: potong polyline berdasarkan panjang lintasan
 
 Fungsi murni dengan cek otomatis (tools/check-horizon.mjs, node polos tanpa
