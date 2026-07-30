@@ -640,10 +640,15 @@ async function main() {
     }
 
     // Kumpulkan titik-titik lintasan A* di world space
-    const waypointsWorld = [userWorldPos.clone()];
+    const semuaWaypoint = [userWorldPos.clone()];
     for (let i = currentWaypointIndex; i < activeWaypointsMap.length; i++) {
-      waypointsWorld.push(activeWaypointsMap[i].clone().applyMatrix4(worldFromMap));
+      semuaWaypoint.push(activeWaypointsMap[i].clone().applyMatrix4(worldFromMap));
     }
+
+    // Jangan gambar yang tak pantas terlihat dari sini. Ini BUKAN occlusion — occlusion
+    // sungguhan ada di occluder mesh; ini keterbacaan navigasi. Hanya memengaruhi RENDER:
+    // perhitungan jarak, kemajuan waypoint, dan deteksi SAMPAI tetap memakai rute penuh.
+    const waypointsWorld = clipPathToHorizon(semuaWaypoint, HORIZON_M);
 
     if (waypointsWorld.length < 2) return;
 
@@ -655,6 +660,7 @@ async function main() {
     // Jarak interval antar panah (0.5m)
     const spacing = 0.5;
     const timeOffset = (performance.now() * 0.001 * 0.7) % spacing;
+    const chevronTerpasang = [];   // dipakai Step 3 untuk meredupkan ujung horizon
 
     for (let i = 0; i < waypointsWorld.length - 1; i++) {
       const p1 = waypointsWorld[i];
@@ -680,8 +686,18 @@ async function main() {
         const lookTarget = pos.clone().add(segDir);
         chevron.lookAt(lookTarget);
         floorTrailGroup.add(chevron);
+        chevronTerpasang.push(chevron);
       }
     }
+    // Tiga chevron terakhir dikecilkan (0.75 / 0.5 / 0.25, terjauh paling kecil) agar tidak
+    // muncul-hilang mendadak saat berjalan. Lewat SKALA, bukan transparansi: menghindari
+    // sorting alpha dan alokasi material per-chevron. Jejak < 3 chevron → ramp seadanya.
+    const ramp = [0.75, 0.5, 0.25];
+    const n = chevronTerpasang.length;
+    for (let k = 0; k < Math.min(ramp.length, n); k++) {
+      chevronTerpasang[n - 1 - k].scale.setScalar(ramp[k]);
+    }
+
     floorTrailGroup.visible = true;
   }
 
@@ -723,6 +739,14 @@ async function main() {
       const user = new THREE.Vector3(); camera.getWorldPosition(user);
       const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
       const dist = user.distanceTo(flat);
+
+      // Pilar tujuan hanya tampak saat dekat. PILAR_M sengaja lebih besar dari HORIZON_M:
+      // pilar menandai tujuan akhir dan berguna kalau sudah terlihat sesaat sebelum jejaknya
+      // sampai ke sana. Informasi jaraknya tetap ada di HUD, jadi tak ada yang hilang.
+      // Hanya visual — perhitungan jarak & deteksi SAMPAI di bawah tidak terpengaruh.
+      // Aman ditulis tiap frame: gerbang lintas-lantai (ADR-W007) menyetel destination=null,
+      // sehingga onXRFrame sudah keluar lebih awal dan tak pernah sampai ke baris ini.
+      destMarker.visible = dist <= PILAR_M;
 
       // Update animasi panah berjalan menapak di lantai koridor
       if (lastWorldFromMap) {
