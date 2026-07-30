@@ -279,14 +279,13 @@ async function main() {
         state.pos = `x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} z=${p.z.toFixed(1)}`;
         lastMapPos = new THREE.Vector3(p.x, p.y, p.z);
 
-        // Hanya relevan saat SHOW_MESH: ThreeAdapter memuat mesh dari mapCodes[0], padahal
-        // urutan mapCodes = artefak urutan hintMapCodes, BUKAN peringkat kecocokan (ADR-W001).
-        // Urutkan ulang pakai elevasi Y supaya mesh lantai yang dimuat benar, bukan tertukar.
-        if (SHOW_MESH) {
-          d.mapCodes = floorOf(p.y) === 2
-            ? ["MAP_MW1QTZWG1TLG", "MAP_BCADVLIXFSJE"]
-            : ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];
-        }
+        // ThreeAdapter memuat mesh dari mapCodes[0], padahal urutan mapCodes = artefak urutan
+        // hintMapCodes, BUKAN peringkat kecocokan (ADR-W001). Urutkan ulang pakai elevasi Y
+        // supaya mesh lantai yang dimuat benar. Berlaku di SEMUA mode sejak mesh juga dimuat
+        // di produksi sebagai occluder — kalau tertukar, occluder-nya lantai yang salah.
+        d.mapCodes = floorOf(p.y) === 2
+          ? ["MAP_MW1QTZWG1TLG", "MAP_BCADVLIXFSJE"]
+          : ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];
       }
       const codes = (d.mapCodes || []).join(",");
       if (codes) state.seen.add(codes);
@@ -670,12 +669,39 @@ async function main() {
     floorTrailGroup.visible = true;
   }
 
+  // Mesh dimuat SDK secara asinkron SETELAH onLocalizationSuccess (urutan SDK:
+  // onLocalizationSuccess → fetchMapDetails → ensureMeshLoaded → applyMeshTransform), jadi
+  // tak ada callback yang menandai "mesh siap". Karena itu dicek tiap frame; jumlah anak
+  // ≤ jumlah lantai, dan objek yang sudah diproses ditandai userData.msPatched.
+  // `adapter.world` ditandai private di TypeScript, tapi itu compile-time saja — nama
+  // properti selamat dari minifikasi. Terikat @multisetai/vps v2.3.1 (versi dikunci).
+  function patchMeshChildren() {
+    const group = adapter.world?.getMeshGroup?.();
+    if (!group) return;
+    for (const child of group.children) {
+      if (child.userData.msPatched) continue;
+      child.userData.msPatched = true;
+
+      // `name` diisi SDK dengan `_id` map (mapDetails._id). Gizmo bawaan SDK tak bernama,
+      // jadi otomatis terlewat — dan showGizmo:false membuatnya tak ada sama sekali.
+      const pose = child.name ? mapSetPoses.get(child.name) : null;
+      if (pose) {
+        child.position.copy(pose.position);
+        child.quaternion.copy(pose.quaternion);
+        child.updateMatrixWorld(true);
+      }
+    }
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    showMesh: SHOW_MESH,      // hanya di ?mesh=true — mesh = alat ukur akurasi, bukan fitur (ADR-W006)
+    // Mesh SELALU dimuat: dipakai sebagai depth-only occluder (Task 3). `?mesh=true` hanya
+    // mengubah MATERIAL-nya (shader SDK tetap terlihat) agar kesejajaran bisa dinilai mata.
+    showMesh: true,
     showGizmo: false,         // default SDK true; gizmo bawaannya tak dipakai (kita punya gizmo sendiri)
     useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
+      patchMeshChildren();   // mesh dimuat asinkron; tak ada callback "mesh siap" dari SDK
       if (!destination) return;
       // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
       const user = new THREE.Vector3(); camera.getWorldPosition(user);
