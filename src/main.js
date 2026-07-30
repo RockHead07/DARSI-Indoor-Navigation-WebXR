@@ -648,7 +648,12 @@ async function main() {
     // Jangan gambar yang tak pantas terlihat dari sini. Ini BUKAN occlusion — occlusion
     // sungguhan ada di occluder mesh; ini keterbacaan navigasi. Hanya memengaruhi RENDER:
     // perhitungan jarak, kemajuan waypoint, dan deteksi SAMPAI tetap memakai rute penuh.
-    const waypointsWorld = clipPathToHorizon(semuaWaypoint, HORIZON_M);
+    // clipPathToHorizon adalah helper geometri polos: titik interpolasi di ujung horizon
+    // dikembalikan sebagai objek {x,y,z} biasa, dan titik lainnya diteruskan sebagai
+    // REFERENSI ke input. Dinormalkan jadi Vector3 baru di sini — memberi .clone()/.sub()
+    // yang dipakai loop chevron, sekaligus memutus alias ke activeWaypointsMap.
+    const waypointsWorld = clipPathToHorizon(semuaWaypoint, HORIZON_M)
+      .map((p) => new THREE.Vector3(p.x, p.y, p.z));
 
     if (waypointsWorld.length < 2) return;
 
@@ -692,7 +697,7 @@ async function main() {
     // Tiga chevron terakhir dikecilkan (0.75 / 0.5 / 0.25, terjauh paling kecil) agar tidak
     // muncul-hilang mendadak saat berjalan. Lewat SKALA, bukan transparansi: menghindari
     // sorting alpha dan alokasi material per-chevron. Jejak < 3 chevron → ramp seadanya.
-    const ramp = [0.75, 0.5, 0.25];
+    const ramp = [0.25, 0.5, 0.75];   // indeks 0 dipasang ke chevron TERJAUH → terjauh paling kecil
     const n = chevronTerpasang.length;
     for (let k = 0; k < Math.min(ramp.length, n); k++) {
       chevronTerpasang[n - 1 - k].scale.setScalar(ramp[k]);
