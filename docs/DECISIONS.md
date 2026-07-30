@@ -50,6 +50,11 @@ Merekam koordinat POI secara langsung dari VPS melalui tombol **REKAM POI** pada
 > **Diperluas oleh ADR-W006 (2026-07-29):** keputusan "produksi tanpa mesh" tetap berlaku,
 > tetapi mesh kini bisa dihidupkan sebagai alat diagnostik lewat `?mesh=true`.
 
+> **Sebagian dicabut oleh ADR-W010 (2026-07-30):** `showMesh` sekarang UNCONDITIONAL — mesh
+> gedung dimuat di produksi juga, bukan hanya lewat `?mesh=true`. "Produksi tanpa mesh" tidak
+> berlaku lagi; yang tersisa dari keputusan ini hanya niatnya (mesh akhirnya jadi occluder
+> tak terlihat), menunggu material depth-only.
+
 
 ### Konteks
 Secara default, opsi `showMesh: true` pada `ThreeAdapter` mengonstruksi dan menampilkan mesh 3D gedung hasil scan VPS sebagai overlay di atas kamera. Pada pengujian lapangan, mesh ini tampak melayang atau offset akibat variansi akurasi scan.
@@ -126,6 +131,10 @@ Pada Chrome Android WebXR `immersive-ar`, munculnya dialog izin OS (seperti `nav
 ---
 
 ## ADR-W006 — Occlusion ditunda; mesh jadi alat diagnostik `?mesh=true` (2026-07-29)
+
+> **Sebagian dicabut oleh ADR-W010 (2026-07-30):** `showMesh` tidak lagi digerbangi URL —
+> ia unconditional `true`. `?mesh=true` sekarang no-op; klaim "produksi menampilkan kamera
+> bersih" di bawah ini tidak lagi berlaku sampai material occluder depth-only dipasang.
 
 ### Konteks
 Occlusion depth masking (`showMesh: true` + material `colorWrite:false, depthWrite:true`)
@@ -363,9 +372,11 @@ murni**. Di ujung koridor 30 m, yaw saja → meleset 11.4 m.
   dukungan perangkat belum diuji. Tetap dicatat untuk occlusion jarak dekat.
 - **Mesh berpotensi jadi alat ukur akurasi yang sah** — pertama kalinya bagi project ini —
   begitu kesejajarannya terverifikasi di lapangan.
-- `adapter.world.getMeshGroup()` menembus field `private` SDK. Diterima sebagai utang
-  tercatat: tak ada accessor lain, `meshGroup` anonim di scene, versi SDK dikunci di
-  `package.json`. **Upgrade `@multisetai/vps` wajib memicu pengecekan ulang bagian ini.**
+- Mesh dicari lewat `scene.getObjectByName(_id)` — lookup yang SAMA dipakai SDK sendiri
+  (`this.scene.getObjectByName(e._id)` di `dist/three/index.js`) untuk deduplikasi mesh, jadi
+  tidak menembus field `private`/internal SDK apa pun. `_id` map dipasang SDK sebagai
+  `scene.name` root glTF SEBELUM ditambahkan ke grup, jadi lookup ini tersedia sejak mesh
+  masuk scene.
 
 ---
 

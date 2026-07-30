@@ -92,7 +92,7 @@ DARSI-Indoor-Navigation-WebXR/
 │   ├── data/
 │   │   └── pois.json       # Basis data POI (Point of Interest)
 │   │   └── navgraph.json   # Node koridor + edges untuk A* pathfinding
-│   └── draco/              # Draco 3D mesh decoders (hanya dipakai saat ?mesh=true)
+│   └── draco/              # Draco 3D mesh decoders (dimuat di semua mode sejak ADR-W010, bukan hanya ?mesh=true)
 ├── src/
 │   └── main.js             # Kode utama aplikasi (entry point spike WebXR)
 ├── tools/

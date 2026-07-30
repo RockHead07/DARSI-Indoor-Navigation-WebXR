@@ -31,10 +31,15 @@ assert.deepEqual(clipPathToHorizon([], 8), []);
 assert.deepEqual(clipPathToHorizon([P(1, 2)], 8), [P(1, 2)]);
 assert.deepEqual(clipPathToHorizon([P(0, 0), P(0, 5)], 0), [P(0, 0)], "horizon 0 → hanya titik awal");
 
+// 5b. Segmen panjang-nol (dua titik identik berurutan) tidak boleh membuat NaN.
+const kembar = clipPathToHorizon([P(0, 0), P(0, 0), P(0, 10)], 4);
+assert.equal(kembar.length, 2, "titik kembar harus dilewati, bukan jadi titik ekstra");
+assert.ok(Number.isFinite(kembar[1].z), `z harus berhingga, dapat ${kembar[1].z}`);
+
 // 6. Tidak memutasi masukan.
 const asli = [P(0, 0), P(0, 10)];
 const salinan = JSON.parse(JSON.stringify(asli));
 clipPathToHorizon(asli, 4);
 assert.deepEqual(asli, salinan, "input tidak boleh dimutasi");
 
-console.log("OK — clipPathToHorizon lolos 6 kelompok cek.");
+console.log("OK — clipPathToHorizon lolos 7 kelompok cek.");

@@ -41,7 +41,7 @@ Tanpa `?poiId=` → pilih tujuan dari dropdown di panel bawah.
 |---|---|
 | `?poiId=<id>` | Langsung navigasi ke POI itu (dipanggil dari WebView) |
 | `?admin=true` (atau `debug=true`) | Overlay semua POI + graph koridor + tombol developer |
-| `?mesh=true` | **Diagnostik.** Render mesh gedung VPS — satu-satunya cek akurasi yang kita punya (ADR-W006) |
+| `?mesh=true` | Tidak berefek saat ini (no-op) — mesh gedung VPS sudah tampil di semua mode sejak ADR-W010. Reserved untuk toggle material diagnostik-vs-occluder di masa depan |
 
 ---
 
@@ -66,7 +66,7 @@ Tanpa `?poiId=` → pilih tujuan dari dropdown di panel bawah.
 - [x] Diskriminasi lantai TERBUKTI (`position.Y` sebagai sinyal)
 - [x] Navigasi world-anchored berfungsi (jarak + "sampai")
 - [x] Chevron lantai jadi penunjuk arah **tunggal**; panah 3D HUD dihapus (ADR-W008)
-- [x] Kamera AR aktif jernih; mesh jadi diagnostik `?mesh=true` (ADR-W006)
+- [x] Mesh kini dimuat di SEMUA mode (bukan hanya `?mesh=true`); untuk sementara tetap terlihat sampai material occluder depth-only dipasang (ADR-W010)
 - [x] Mesin A* + navigasi POI map-anchored + chevron trail di lantai
 - [x] Gerbang lintas-lantai — tak pernah menggambar rute palsu (ADR-W007)
 - [x] Warm-up ARCore sebelum localize pertama (ADR-W005)

@@ -6,6 +6,9 @@
 // kalau jalur membelok di 6 m, user tetap melihat sampai tikungan dan sedikit setelahnya —
 // justru itu yang memberi tahu "belok di sini". Titik potong diinterpolasi tepat di batas
 // agar ujung jejak tidak berkedip saat user berjalan. Fungsi murni: tidak memutasi masukan.
+// KONTRAK: titik yang diteruskan dikembalikan sebagai REFERENSI ke objek input; hanya titik
+// interpolasi di ujung horizon yang objek baru. Pemanggil yang perlu memutasi hasilnya WAJIB
+// menyalin dulu (pemanggil di main.js membungkusnya jadi THREE.Vector3 baru).
 export function clipPathToHorizon(points, horizonM) {
   if (points.length < 2) return points.slice();
   const out = [points[0]];

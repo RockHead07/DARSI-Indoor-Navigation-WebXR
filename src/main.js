@@ -3,11 +3,13 @@
 // BUKAN tujuan — cukup: tahu lantai (pos.Y) + panah arah + jarak + "sampai".
 //
 // Mode:
-//   - default              : produk. Mesh gedung dimuat sebagai occluder; SEMENTARA masih
-//                            terlihat sampai material depth-only dipasang (ADR-W010).
-//   - ?mesh=true           : DIAGNOSTIK. Render mesh gedung VPS — satu-satunya cek AKURASI
-//                            yang kita punya (FIELD-TESTS Uji 2). Occlusion dicabut, jadi
-//                            di mode ini mesh memang sengaja terlihat.
+//   - default              : produk. Mesh gedung SELALU dimuat sejak ADR-W010 (dipakai
+//                            sebagai occluder ke depannya); SEMENTARA masih terlihat sampai
+//                            material depth-only dipasang.
+//   - ?mesh=true           : TIDAK BEDA dari default saat ini — material swap belum
+//                            landed, jadi flag ini currently no-op. Mesh gedung VPS SUDAH
+//                            terlihat di semua mode; ini masih satu-satunya cek AKURASI
+//                            yang kita punya (FIELD-TESTS Uji 2).
 //   - ?admin=true / debug  : overlay semua POI + graph koridor + tombol developer.
 //   - ?poiId=<id>          : langsung navigasi ke POI itu (dipanggil dari WebView).
 
@@ -33,12 +35,12 @@ const ARCORE_WARMUP_MS = 1500;
 // Ambang elevasi map-space pemisah lantai (ADR-W001: Lt1 Y≈−0.5, Lt2 Y≈3.7).
 const floorOf = (mapY) => (mapY >= 1.5 ? 2 : 1);
 
-// Mesh gedung VPS kini SELALU dimuat (dipakai sebagai occluder). SHOW_MESH tidak lagi
-// menentukan APAKAH mesh dimuat, melainkan BAGAIMANA ia dirender: di ?mesh=true material
-// shader SDK dibiarkan agar kesejajaran bisa dinilai mata; di produksi ia diganti material
-// depth-only. Dibaca sekali saat load karena mode tak bisa berubah di tengah sesi.
-// CATATAN: penggantian material itu belum terpasang, jadi untuk sekarang mesh terlihat di
-// kedua mode. Sengaja dibiarkan unused sampai task occluder mendarat.
+// Mesh gedung VPS kini SELALU dimuat (dipakai sebagai occluder). SHOW_MESH SEHARUSNYA
+// menentukan BAGAIMANA ia dirender — di ?mesh=true material shader SDK dibiarkan agar
+// kesejajaran bisa dinilai mata; di produksi diganti material depth-only — tapi material
+// swap itu BELUM DIPASANG. Karena itu ?mesh=true saat ini TIDAK MENGUBAH APA PUN: mesh
+// terlihat sama persis di kedua mode. Konstanta ini dibaca tapi sengaja dibiarkan unused
+// sampai task occluder mendarat — JANGAN dihapus, tinggal sambungkan begitu material swap ada.
 const SHOW_MESH = new URLSearchParams(location.search).has("mesh");
 
 // Horizon visibilitas (spec 2026-07-30). Angka bisa disetel di lapangan tanpa deploy ulang —
@@ -707,26 +709,32 @@ async function main() {
   }
 
   // Mesh dimuat SDK secara asinkron SETELAH onLocalizationSuccess (urutan SDK:
-  // onLocalizationSuccess → fetchMapDetails → ensureMeshLoaded → applyMeshTransform), jadi
-  // tak ada callback yang menandai "mesh siap". Karena itu dicek tiap frame; jumlah anak
-  // ≤ jumlah lantai, dan objek yang sudah diproses ditandai userData.msPatched.
-  // `adapter.world` ditandai private di TypeScript, tapi itu compile-time saja — nama
-  // properti selamat dari minifikasi. Terikat @multisetai/vps v2.3.1 (versi dikunci).
+  // onLocalizationSuccess → fetchMapDetails → ensureMeshLoaded → applyMeshTransform), dan SDK
+  // tak menyediakan callback "mesh siap" — jadi dicek tiap frame sampai semuanya terpasang.
+  //
+  // Dicari lewat scene.getObjectByName: SDK menamai root glTF tiap map dengan `_id`-nya
+  // (`s.scene.name = e._id`) SEBELUM menambahkannya ke grup, dan SDK sendiri memakai lookup
+  // yang sama (`this.scene.getObjectByName(e._id)`) untuk deduplikasi. Cara ini tidak
+  // menyentuh field internal SDK sama sekali.
+  //
+  // Aman sekali-pasang: applyMeshTransform() hanya menulis position/quaternion/scale/visible
+  // pada GRUP induk, tak pernah menyentuh transform anak — jadi koreksi ini bertahan melewati
+  // setiap re-localize.
+  let meshTerpasang = 0;
   function patchMeshChildren() {
-    const group = adapter.world?.getMeshGroup?.();
-    if (!group) return;
-    for (const child of group.children) {
-      if (child.userData.msPatched) continue;
+    if (meshTerpasang >= mapSetPoses.size) return;   // ≤ jumlah lantai; berhenti setelah lengkap
+    for (const [id, pose] of mapSetPoses) {
+      const child = scene.getObjectByName(id);
+      if (!child || child.userData.msPatched) continue;
       child.userData.msPatched = true;
-
-      // `name` diisi SDK dengan `_id` map (mapDetails._id). Gizmo bawaan SDK tak bernama,
-      // jadi otomatis terlewat — dan showGizmo:false membuatnya tak ada sama sekali.
-      const pose = child.name ? mapSetPoses.get(child.name) : null;
-      if (pose) {
-        child.position.copy(pose.position);
-        child.quaternion.copy(pose.quaternion);
-        child.updateMatrixWorld(true);
-      }
+      meshTerpasang++;
+      child.position.copy(pose.position);
+      child.quaternion.copy(pose.quaternion);
+      child.updateMatrixWorld(true);
+      // Tampilkan di HUD: satu-satunya bukti bahwa koreksi BENAR-BENAR terpasang. Versi
+      // sebelumnya gagal diam-diam dan lolos build, cek otomatis, dan review implementer.
+      state.auth = `OK (relativePose: ${mapSetPoses.size} map, ${meshTerpasang} terpasang)`;
+      draw();
     }
   }
 
@@ -751,7 +759,12 @@ async function main() {
       // Hanya visual — perhitungan jarak & deteksi SAMPAI di bawah tidak terpengaruh.
       // Aman ditulis tiap frame: gerbang lintas-lantai (ADR-W007) menyetel destination=null,
       // sehingga onXRFrame sudah keluar lebih awal dan tak pernah sampai ke baris ini.
-      destMarker.visible = dist <= PILAR_M;
+      // Diukur ke PILAR-nya sendiri, bukan ke `dist`: `dist` mengukur jarak ke waypoint A*
+      // yang sedang dituju, sedangkan pilar berdiri di POI akhir. Memakai `dist` membuat
+      // pilar muncul begitu waypoint terdekat dekat — padahal POI-nya masih 40 m di balik
+      // dua tembok, persis kasus yang gerbang ini seharusnya cegah.
+      const pilarFlat = destMarker.position.clone(); pilarFlat.y = user.y;
+      destMarker.visible = user.distanceTo(pilarFlat) <= PILAR_M;
 
       // Update animasi panah berjalan menapak di lantai koridor
       if (lastWorldFromMap) {
