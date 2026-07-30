@@ -14,6 +14,7 @@
 import * as THREE from "three";
 import { MultisetClient, XRSessionManager } from "@multisetai/vps/core";
 import { ThreeAdapter } from "@multisetai/vps/three";
+import { clipPathToHorizon } from "./horizon.js";
 
 const MAPSET = "MSET_PKRKGGFB1RO0";                       // Jemursari
 const FLOORS = ["MAP_BCADVLIXFSJE", "MAP_MW1QTZWG1TLG"];  // 2 lantai (hint)
@@ -39,6 +40,16 @@ const floorOf = (mapY) => (mapY >= 1.5 ? 2 : 1);
 // CATATAN: penggantian material itu belum terpasang, jadi untuk sekarang mesh terlihat di
 // kedua mode. Sengaja dibiarkan unused sampai task occluder mendarat.
 const SHOW_MESH = new URLSearchParams(location.search).has("mesh");
+
+// Horizon visibilitas (spec 2026-07-30). Angka bisa disetel di lapangan tanpa deploy ulang —
+// sejarah repo ini menunjukkan konstanta spasial selalu perlu disetel setelah dicoba
+// (EYE_HEIGHT baru ketahuan salah setelah pilar tenggelam ter-deploy).
+const numParam = (nama, fallback) => {
+  const v = parseFloat(new URLSearchParams(location.search).get(nama));
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+};
+const HORIZON_M = numParam("horizon", 8);   // panjang jejak yang digambar (meter, sepanjang lintasan)
+const PILAR_M = numParam("pilar", 12);      // jarak pilar tujuan mulai tampak (meter, horizontal)
 
 // --- kontrak alur-balik ke CopyCat (Flutter) — lihat docs/DEEPLINK-CONTRACT.md ---
 // Halaman ini jalan di Chrome Custom Tab yang diluncurkan CopyCat. "Selesai" harus balik
