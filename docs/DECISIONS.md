@@ -323,6 +323,52 @@ untuk disalin tangan, dan `edges` beserta `distance`-nya harus ditulis sendiri.
 
 ---
 
+> **REVISI 2026-07-30 (controller):** Task 3 (material occluder) **belum mendarat** — ia
+> diblokir gerbang lapangan Task 2 Step 7 yang menuntut pemilik menguji kesejajaran mesh di
+> Lantai 1 DAN Lantai 2 di Jemursari. Karena itu Task 6 mendokumentasikan **apa yang benar-benar
+> ada**: koreksi `relativePose` (mendarat) + horizon visibilitas (mendarat), dengan occlusion
+> tetap ditandai MENUNGGU. Menulis "occlusion selesai" sekarang akan mengulang doc-drift yang
+> berkali-kali menggigit repo ini. Task 3 nanti memperbarui bagian ini.
+
+## ADR-W010 — Koreksi `relativePose` + horizon visibilitas (2026-07-30)
+
+**Sebagian mencabut penundaan di ADR-W006** — penyebab mesh meleset sudah diperbaiki;
+material occluder menunggu verifikasi lapangan.
+
+### Konteks
+Uji 5 membuktikan SDK tak pernah menerapkan `relativePose` tiap map di dalam map-set:
+Lantai 1 (`order 0`) identitas, Lantai 2 geser `(-0.25, 3.94, 0.59)` + **rotasi 20.89° yaw
+murni**. Di ujung koridor 30 m, yaw saja → meleset 11.4 m.
+
+### Keputusan
+1. `relativePose` diambil sendiri saat startup dan diterapkan ke **anak** `meshGroup` —
+   bukan ke grupnya, karena `applyMeshTransform()` milik SDK menimpa transform grup tiap
+   localize. Hasilnya `worldFromMap · relativePose · vertex`.
+2. **Horizon visibilitas**: jejak dipotong pada `HORIZON_M` (default 8 m, `?horizon=`)
+   sepanjang lintasan, pilar tujuan digerbangi `PILAR_M` (default 12 m, `?pilar=`). Ini
+   **bukan** occlusion melainkan keterbacaan navigasi — dicatat eksplisit supaya tak dikutip
+   kelak sebagai "occlusion sudah beres".
+3. ⏳ **Material depth-only occluder BELUM dipasang.** Ia menunggu gerbang lapangan: mesh
+   harus terbukti sejajar koridor di Lantai 1 **dan** Lantai 2 lewat `?mesh=true`. Occluder
+   yang posisinya salah mengklip objek di tempat keliru, dan karena `colorWrite:false`
+   penyebabnya tak terlihat sama sekali — itulah yang mencabut occlusion di ADR-W006.
+
+### Konsekuensi
+- `showMesh` kini selalu aktif, jadi mesh diunduh di produksi juga. **Sampai material
+  occluder dipasang, mesh itu TERLIHAT di semua mode** — kondisi sementara yang disengaja.
+- Pengurutan `d.mapCodes` berdasarkan elevasi Y (ADR-W001) dilepas dari gerbang `SHOW_MESH`:
+  mesh kini dimuat di semua mode, dan `mapCodes[0]` yang tertukar berarti mesh lantai salah.
+- Depth ARCore ditolak untuk sekarang: dokumentasi resmi menyebut tembok putih polos
+  menghasilkan depth tak presisi, SDK mengunci `requestSession` tanpa passthrough, dan
+  dukungan perangkat belum diuji. Tetap dicatat untuk occlusion jarak dekat.
+- **Mesh berpotensi jadi alat ukur akurasi yang sah** — pertama kalinya bagi project ini —
+  begitu kesejajarannya terverifikasi di lapangan.
+- `adapter.world.getMeshGroup()` menembus field `private` SDK. Diterima sebagai utang
+  tercatat: tak ada accessor lain, `meshGroup` anonim di scene, versi SDK dikunci di
+  `package.json`. **Upgrade `@multisetai/vps` wajib memicu pengecekan ulang bagian ini.**
+
+---
+
 ## ADR dari repo Unity yang tetap berlaku
 
 - **ADR-020:** Lift memutus tracking $\rightarrow$ navigasi tersegmentasi. Di web: manfaatkan `relocalization` otomatis VPS + pantau perubahan `mapCodes` / `position.Y` untuk konfirmasi perpindahan lantai.

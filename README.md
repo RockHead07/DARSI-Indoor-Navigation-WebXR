@@ -76,7 +76,9 @@ Tanpa `?poiId=` → pilih tujuan dari dropdown di panel bawah.
 - [ ] 🔬 **Uji 4:** kesejajaran mesh setelah warm-up ARCore (`?mesh=true`)
 - [ ] ⛔ **Localize stabil < 1m di Lantai 1** (blocker — `docs/KNOWN-ISSUES.md`)
 - [ ] navgraph Lantai 1 + node tangga/lift (buka rute lintas-lantai)
-- [ ] Occlusion (ditunda sampai mesh terbukti sejajar)
+- [x] Mesh dikoreksi `relativePose` — Lt 2 tak lagi meleset 3.99 m + yaw 20.89° (ADR-W010)
+- [x] Horizon visibilitas — jejak & pilar tak digambar di luar jangkauan wajar
+- [ ] Occluder depth-only — menunggu bukti mesh sejajar di Lt 1 & Lt 2 (`?mesh=true`)
 - [ ] Proxy token backend
 - [ ] Pindah ke route `/ar` Next.js
 

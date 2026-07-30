@@ -39,7 +39,15 @@ dari client (sejalan ADR-021).
 
 ## Occlusion: Objek AR Terlihat Menembus Tembok Fisik
 
-**Status:** DITUNDA — pernah diimplementasi 2026-07-28, **dicabut ADR-W006** (2026-07-29)  
+**Status:** ⏳ SEBAGIAN — penyebabnya sudah diperbaiki, occluder-nya belum dipasang.
+
+Koreksi `relativePose` sudah mendarat (ADR-W010): mesh Lantai 2 tak lagi meleset 3.99 m +
+yaw 20.89°. **Material depth-only occluder MENUNGGU gerbang lapangan** — mesh harus terbukti
+sejajar koridor di Lantai 1 dan Lantai 2 lewat `?mesh=true` sebelum dipasang.
+
+⚠️ **Kondisi sementara:** `showMesh` kini selalu aktif tapi materialnya belum diganti, jadi
+mesh gedung TERLIHAT di semua mode, termasuk produksi.
+
 **Dampak:** Pilar penanda POI dan chevron lantai terlihat di balik tembok fisik (tidak
 ter-occlude oleh geometri dunia nyata).
 

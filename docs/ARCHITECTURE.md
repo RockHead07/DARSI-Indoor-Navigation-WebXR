@@ -144,6 +144,12 @@ Penunjuk arah **tunggal** adalah chevron menapak lantai (ADR-W008). Panah 3D HUD
 - **Loop Frame (`onXRFrame`):** posisi kamera diambil via `camera.getWorldPosition()`, trail
   diperbarui, dan waypoint aktif maju saat jarak `< 1.2 m`. Kalkulasi jarak mengabaikan beda
   tinggi (horizontal distance); saat waypoint terakhir tercapai HUD menampilkan `"SAMPAI"`.
+- **Koreksi mesh (`patchMeshChildren`):** `relativePose` tiap map diterapkan ke anak
+  `meshGroup` (grup-nya ditimpa SDK tiap localize). Dijalankan tiap frame karena SDK tak
+  menyediakan callback "mesh siap". **Material depth-only occluder BELUM dipasang** —
+  menunggu gerbang lapangan (ADR-W010, `docs/KNOWN-ISSUES.md`).
+- **Horizon visibilitas:** `clipPathToHorizon()` memotong jejak berdasarkan panjang lintasan;
+  pilar tujuan digerbangi jarak. Hanya memengaruhi render, bukan logika navigasi.
 
 ### 6.5. POI (Point of Interest)
 - Memeriksa URL query string `?poiId=`. Jika ada, sistem membaca berkas `/data/pois.json` melalui `loadPoi(poiId)`.
