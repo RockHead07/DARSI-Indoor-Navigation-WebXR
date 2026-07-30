@@ -91,14 +91,6 @@ const ID = import.meta.env.VITE_MS_CLIENT_ID;
 const SECRET = import.meta.env.VITE_MS_CLIENT_SECRET;
 if (!ID || !SECRET) fail("Set VITE_MS_CLIENT_ID & VITE_MS_CLIENT_SECRET di .env.local");
 
-// MODE DIAGNOSTIK MANDIRI (?mapset=true) — menguji akar "mesh meleset".
-// SDK mendeklarasikan endpoint `mapSetDetailsUrl` DAN tipe `IMapSetMapData.relativePose`
-// (pose tiap map di dalam map-set), tapi KEDUANYA tak pernah dipakai: 0 kemunculan di
-// seluruh dist. ThreeAdapter mengunduh mesh map TUNGGAL (vertex di ruang map itu sendiri)
-// lalu menerapkan worldFromMap (ruang MAP-SET) tanpa relativePose → mesh meleset persis
-// sebesar relativePose. Hipotesis: Lt 1 = jangkar (≈identitas, karena itu tampak hampir
-// benar), Lt 2 punya geser nyata (karena itu "yang hancur selalu lantai 2").
-// Sengaja dijalankan SEBELUM gerbang WebXR supaya bisa dibuka di laptop — tak butuh AR.
 // Ambil relativePose tiap map di dalam map-set. SDK punya endpoint ini di DEFAULT_ENDPOINTS
 // (`mapSetDetailsUrl`) tapi TIDAK PERNAH memanggilnya — `relativePose` 0 kemunculan di
 // seluruh dist. Tanpa ini mesh lantai 2 meleset 3.99 m + yaw 20.89 derajat (Uji 5).
@@ -124,6 +116,14 @@ async function fetchMapSetPoses(client) {
   return out;
 }
 
+// MODE DIAGNOSTIK MANDIRI (?mapset=true) — menguji akar "mesh meleset".
+// SDK mendeklarasikan endpoint `mapSetDetailsUrl` DAN tipe `IMapSetMapData.relativePose`
+// (pose tiap map di dalam map-set), tapi KEDUANYA tak pernah dipakai: 0 kemunculan di
+// seluruh dist. ThreeAdapter mengunduh mesh map TUNGGAL (vertex di ruang map itu sendiri)
+// lalu menerapkan worldFromMap (ruang MAP-SET) tanpa relativePose → mesh meleset persis
+// sebesar relativePose. Hipotesis: Lt 1 = jangkar (≈identitas, karena itu tampak hampir
+// benar), Lt 2 punya geser nyata (karena itu "yang hancur selalu lantai 2").
+// Sengaja dijalankan SEBELUM gerbang WebXR supaya bisa dibuka di laptop — tak butuh AR.
 async function mapsetDiagnostic() {
   const client = new MultisetClient({
     clientId: ID, clientSecret: SECRET, mapType: "map-set", code: MAPSET,
