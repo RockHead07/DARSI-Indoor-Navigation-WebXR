@@ -45,8 +45,11 @@ Koreksi `relativePose` sudah mendarat (ADR-W010): mesh Lantai 2 tak lagi meleset
 yaw 20.89°. **Material depth-only occluder MENUNGGU gerbang lapangan** — mesh harus terbukti
 sejajar koridor di Lantai 1 dan Lantai 2 lewat `?mesh=true` sebelum dipasang.
 
-⚠️ **Kondisi sementara:** `showMesh` kini selalu aktif tapi materialnya belum diganti, jadi
-mesh gedung TERLIHAT di semua mode, termasuk produksi.
+`showMesh` tetap digerbangi `?mesh=true`, jadi produksi tidak memuat mesh sama sekali. Sempat
+dibuat aktif tanpa syarat untuk menyiapkan occluder lalu dikembalikan: selama materialnya
+belum ada, produksi cuma menanggung ongkosnya (mesh ungu menutupi kamera + unduhan mesh &
+Draco) tanpa satu pun manfaatnya. Task occluder nanti mengaktifkannya **bersamaan** dengan
+memasang material — satu paket, tak boleh dipisah lagi.
 
 **Dampak:** Pilar penanda POI dan chevron lantai terlihat di balik tembok fisik (tidak
 ter-occlude oleh geometri dunia nyata).

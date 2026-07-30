@@ -41,7 +41,10 @@ Tanpa `?poiId=` → pilih tujuan dari dropdown di panel bawah.
 |---|---|
 | `?poiId=<id>` | Langsung navigasi ke POI itu (dipanggil dari WebView) |
 | `?admin=true` (atau `debug=true`) | Overlay semua POI + graph koridor + tombol developer |
-| `?mesh=true` | Tidak berefek saat ini (no-op) — mesh gedung VPS sudah tampil di semua mode sejak ADR-W010. Reserved untuk toggle material diagnostik-vs-occluder di masa depan |
+| `?mesh=true` | **Diagnostik.** Render mesh gedung VPS (sudah dikoreksi `relativePose`, ADR-W010) — satu-satunya cek akurasi yang kita punya. Produksi tidak memuat mesh sama sekali |
+| `?horizon=<m>` | Panjang jejak chevron yang digambar (default 8 m) |
+| `?pilar=<m>` | Jarak pilar tujuan mulai tampak (default 12 m) |
+| `?mapset=true` | Diagnostik mandiri: baca `relativePose` tiap map. Jalan tanpa AR, bisa dibuka di laptop |
 
 ---
 

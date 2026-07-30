@@ -92,9 +92,10 @@ DARSI-Indoor-Navigation-WebXR/
 │   ├── data/
 │   │   └── pois.json       # Basis data POI (Point of Interest)
 │   │   └── navgraph.json   # Node koridor + edges untuk A* pathfinding
-│   └── draco/              # Draco 3D mesh decoders (dimuat di semua mode sejak ADR-W010, bukan hanya ?mesh=true)
+│   └── draco/              # Draco 3D mesh decoders (hanya dipakai saat ?mesh=true)
 ├── src/
-│   └── main.js             # Kode utama aplikasi (entry point spike WebXR)
+│   ├── main.js             # Kode utama aplikasi (entry point spike WebXR)
+│   └── horizon.js          # clipPathToHorizon — fungsi murni, bisa diuji dari Node
 ├── tools/
 │   └── verify-mapcodes.mjs # Script utilitas verifikasi mapCodes VPS
 ├── .env.example            # Contoh variabel lingkungan
@@ -127,7 +128,7 @@ Aplikasi dikelola secara terpusat pada berkas `src/main.js` yang terbagi ke dala
 ### 6.3. Localization & Floor Detection
 - Menerima respons VPS melalui callback `onLocalizationResult`.
 - **Deteksi Lantai berbasis `position.Y`:** Berdasarkan temuan pengujian lapangan (2026-07-22), elevasi `Y` pada koordinat mapset VPS bersifat absolut dan kokoh (`Y < 1.5m` = Lantai 1 `MAP_BCADVLIXFSJE`, `Y >= 1.5m` = Lantai 2 `MAP_MW1QTZWG1TLG`).
-- Secara dinamis mengurutkan array `d.mapCodes` berdasarkan nilai `position.Y` agar `ThreeAdapter` memuat mesh lantai yang tepat. **Berjalan di SEMUA mode** (tidak lagi digerbangi `?mesh=true`) — sejak `showMesh: true` berlaku tanpa syarat, mesh dimuat di produksi juga, dan `ThreeAdapter` memilih mesh lantai dari `mapCodes[0]`. Urutan `mapCodes` sendiri hanyalah artefak urutan `hintMapCodes`, bukan peringkat kecocokan VPS (ADR-W001) — kalau `mapCodes[0]` tidak diurutkan ulang, mesh lantai yang salah bisa termuat di semua mode, bukan cuma saat diagnostik.
+- Secara dinamis mengurutkan array `d.mapCodes` berdasarkan nilai `position.Y` agar `ThreeAdapter` memuat mesh lantai yang tepat. Urutan `mapCodes` hanyalah artefak urutan `hintMapCodes`, bukan peringkat kecocokan VPS (ADR-W001). Berjalan tanpa gerbang: saat mesh tidak dimuat ia tak berpengaruh apa pun (tak ada yang membaca urutannya), dan membiarkannya begitu berarti task occluder nanti tak perlu mengingat memasangnya kembali.
 
 ### 6.4. Navigation & Floor Chevron Trail
 Penunjuk arah **tunggal** adalah chevron menapak lantai (ADR-W008). Panah 3D HUD sudah dihapus.

@@ -3,13 +3,10 @@
 // BUKAN tujuan — cukup: tahu lantai (pos.Y) + panah arah + jarak + "sampai".
 //
 // Mode:
-//   - default              : produk. Mesh gedung SELALU dimuat sejak ADR-W010 (dipakai
-//                            sebagai occluder ke depannya); SEMENTARA masih terlihat sampai
-//                            material depth-only dipasang.
-//   - ?mesh=true           : TIDAK BEDA dari default saat ini — material swap belum
-//                            landed, jadi flag ini currently no-op. Mesh gedung VPS SUDAH
-//                            terlihat di semua mode; ini masih satu-satunya cek AKURASI
-//                            yang kita punya (FIELD-TESTS Uji 2).
+//   - default              : produk. Kamera bersih, mesh gedung tidak dimuat.
+//   - ?mesh=true           : DIAGNOSTIK. Render mesh gedung VPS (sudah dikoreksi
+//                            relativePose, ADR-W010) — satu-satunya cek AKURASI yang kita
+//                            punya (FIELD-TESTS Uji 2).
 //   - ?admin=true / debug  : overlay semua POI + graph koridor + tombol developer.
 //   - ?poiId=<id>          : langsung navigasi ke POI itu (dipanggil dari WebView).
 
@@ -35,12 +32,12 @@ const ARCORE_WARMUP_MS = 1500;
 // Ambang elevasi map-space pemisah lantai (ADR-W001: Lt1 Y≈−0.5, Lt2 Y≈3.7).
 const floorOf = (mapY) => (mapY >= 1.5 ? 2 : 1);
 
-// Mesh gedung VPS kini SELALU dimuat (dipakai sebagai occluder). SHOW_MESH SEHARUSNYA
-// menentukan BAGAIMANA ia dirender — di ?mesh=true material shader SDK dibiarkan agar
-// kesejajaran bisa dinilai mata; di produksi diganti material depth-only — tapi material
-// swap itu BELUM DIPASANG. Karena itu ?mesh=true saat ini TIDAK MENGUBAH APA PUN: mesh
-// terlihat sama persis di kedua mode. Konstanta ini dibaca tapi sengaja dibiarkan unused
-// sampai task occluder mendarat — JANGAN dihapus, tinggal sambungkan begitu material swap ada.
+// Mesh gedung VPS = alat DIAGNOSTIK, satu-satunya cek AKURASI yang kita punya
+// (FIELD-TESTS Uji 2). Dibaca sekali saat load karena ThreeAdapter membaca showMesh sekali
+// di constructor — mode tak bisa berubah di tengah sesi.
+// Begitu material depth-only occluder dipasang, mesh berubah peran jadi occluder dan harus
+// dimuat di SEMUA mode; saat itu SHOW_MESH beralih makna dari "apakah dimuat" jadi
+// "apakah materialnya dibiarkan terlihat".
 const SHOW_MESH = new URLSearchParams(location.search).has("mesh");
 
 // Horizon visibilitas (spec 2026-07-30). Angka bisa disetel di lapangan tanpa deploy ulang —
@@ -732,9 +729,12 @@ async function main() {
 
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    // Mesh SELALU dimuat: dipakai sebagai depth-only occluder (Task 3). `?mesh=true` hanya
-    // mengubah MATERIAL-nya (shader SDK tetap terlihat) agar kesejajaran bisa dinilai mata.
-    showMesh: true,
+    // Mesh HANYA di ?mesh=true. Sempat dibuat `true` tanpa syarat untuk menyiapkan occluder,
+    // padahal material depth-only-nya belum dipasang — jadi produksi menanggung seluruh
+    // ongkosnya (mesh ungu menutupi kamera + unduhan mesh & Draco) tanpa satu pun manfaatnya.
+    // Task occluder nanti mengubah ini jadi `true` BERSAMAAN dengan memasang materialnya;
+    // dua perubahan itu satu paket dan tak boleh dipisah lagi.
+    showMesh: SHOW_MESH,
     showGizmo: false,         // default SDK true; gizmo bawaannya tak dipakai (kita punya gizmo sendiri)
     useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync

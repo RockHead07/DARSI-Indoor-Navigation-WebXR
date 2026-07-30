@@ -132,9 +132,11 @@ Pada Chrome Android WebXR `immersive-ar`, munculnya dialog izin OS (seperti `nav
 
 ## ADR-W006 — Occlusion ditunda; mesh jadi alat diagnostik `?mesh=true` (2026-07-29)
 
-> **Sebagian dicabut oleh ADR-W010 (2026-07-30):** `showMesh` tidak lagi digerbangi URL —
-> ia unconditional `true`. `?mesh=true` sekarang no-op; klaim "produksi menampilkan kamera
-> bersih" di bawah ini tidak lagi berlaku sampai material occluder depth-only dipasang.
+> **Diperbarui oleh ADR-W010 (2026-07-30):** penyebab mesh meleset sudah ditemukan dan
+> diperbaiki (`relativePose`), sehingga syarat "mesh terbukti sejajar" tinggal menunggu
+> verifikasi lapangan. Gerbang `?mesh=true` di bawah ini **tetap berlaku** — sempat dibuat
+> aktif tanpa syarat lalu dikembalikan, karena tanpa material occluder produksi hanya
+> menanggung ongkosnya tanpa manfaat.
 
 ### Konteks
 Occlusion depth masking (`showMesh: true` + material `colorWrite:false, depthWrite:true`)
@@ -363,10 +365,16 @@ murni**. Di ujung koridor 30 m, yaw saja → meleset 11.4 m.
    penyebabnya tak terlihat sama sekali — itulah yang mencabut occlusion di ADR-W006.
 
 ### Konsekuensi
-- `showMesh` kini selalu aktif, jadi mesh diunduh di produksi juga. **Sampai material
-  occluder dipasang, mesh itu TERLIHAT di semua mode** — kondisi sementara yang disengaja.
-- Pengurutan `d.mapCodes` berdasarkan elevasi Y (ADR-W001) dilepas dari gerbang `SHOW_MESH`:
-  mesh kini dimuat di semua mode, dan `mapCodes[0]` yang tertukar berarti mesh lantai salah.
+- **`showMesh` TETAP digerbangi `?mesh=true`.** Sempat dibuat aktif tanpa syarat untuk
+  menyiapkan occluder, lalu dikembalikan pada hari yang sama: selama materialnya belum ada,
+  produksi hanya menanggung ongkosnya (mesh ungu menutupi kamera + unduhan mesh & Draco)
+  tanpa satu pun manfaatnya. **Pelajaran:** mengaktifkan `showMesh` dan memasang material
+  occluder adalah SATU paket — memisahkannya menghasilkan kondisi yang lebih buruk daripada
+  kedua ujungnya.
+- Pengurutan `d.mapCodes` berdasarkan elevasi Y (ADR-W001) dibiarkan lepas dari gerbang
+  `SHOW_MESH`. Tanpa mesh ia tak berpengaruh (tak ada yang membaca urutannya), dan
+  membiarkannya tanpa gerbang berarti task occluder tak perlu mengingat memasangnya kembali —
+  `mapCodes[0]` yang tertukar berarti occluder dari lantai yang salah.
 - Depth ARCore ditolak untuk sekarang: dokumentasi resmi menyebut tembok putih polos
   menghasilkan depth tak presisi, SDK mengunci `requestSession` tanpa passthrough, dan
   dukungan perangkat belum diuji. Tetap dicatat untuk occlusion jarak dekat.
