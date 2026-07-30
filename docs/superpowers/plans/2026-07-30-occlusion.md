@@ -643,10 +643,13 @@ Cari baris penutup `updateFloorTrail`:
 Ganti menjadi:
 
 ```js
-    // Tiga chevron terakhir dikecilkan (0.75 / 0.5 / 0.25, terjauh paling kecil) agar tidak
-    // muncul-hilang mendadak saat berjalan. Lewat SKALA, bukan transparansi: menghindari
-    // sorting alpha dan alokasi material per-chevron. Jejak < 3 chevron → ramp seadanya.
-    const ramp = [0.75, 0.5, 0.25];
+    // Tiga chevron terakhir dikecilkan agar tidak muncul-hilang mendadak saat berjalan.
+    // Lewat SKALA, bukan transparansi: menghindari sorting alpha dan alokasi material
+    // per-chevron. Jejak < 3 chevron → ramp seadanya.
+    // KOREKSI (review Task 5): chevronTerpasang diisi dari TERDEKAT, jadi indeks 0 dari ramp
+    // dipasang ke chevron TERJAUH. Ramp harus menaik agar terjauh paling kecil — versi awal
+    // plan ini menulis [0.75, 0.5, 0.25] dan justru membuat yang terjauh paling BESAR.
+    const ramp = [0.25, 0.5, 0.75];
     const n = chevronTerpasang.length;
     for (let k = 0; k < Math.min(ramp.length, n); k++) {
       chevronTerpasang[n - 1 - k].scale.setScalar(ramp[k]);
@@ -724,10 +727,18 @@ Di Lantai 2: jejak berhenti di sekitar horizon dan ujungnya tidak berkedip saat 
 
 Sisipkan tepat sebelum baris `## ADR dari repo Unity yang tetap berlaku`:
 
-```markdown
-## ADR-W010 — Koreksi `relativePose` + occluder mesh + horizon visibilitas (2026-07-30)
+> **REVISI 2026-07-30 (controller):** Task 3 (material occluder) **belum mendarat** — ia
+> diblokir gerbang lapangan Task 2 Step 7 yang menuntut pemilik menguji kesejajaran mesh di
+> Lantai 1 DAN Lantai 2 di Jemursari. Karena itu Task 6 mendokumentasikan **apa yang benar-benar
+> ada**: koreksi `relativePose` (mendarat) + horizon visibilitas (mendarat), dengan occlusion
+> tetap ditandai MENUNGGU. Menulis "occlusion selesai" sekarang akan mengulang doc-drift yang
+> berkali-kali menggigit repo ini. Task 3 nanti memperbarui bagian ini.
 
-**Mencabut penundaan di ADR-W006.**
+```markdown
+## ADR-W010 — Koreksi `relativePose` + horizon visibilitas (2026-07-30)
+
+**Sebagian mencabut penundaan di ADR-W006** — penyebab mesh meleset sudah diperbaiki;
+material occluder menunggu verifikasi lapangan.
 
 ### Konteks
 Uji 5 membuktikan SDK tak pernah menerapkan `relativePose` tiap map di dalam map-set:
@@ -738,20 +749,28 @@ murni**. Di ujung koridor 30 m, yaw saja → meleset 11.4 m.
 1. `relativePose` diambil sendiri saat startup dan diterapkan ke **anak** `meshGroup` —
    bukan ke grupnya, karena `applyMeshTransform()` milik SDK menimpa transform grup tiap
    localize. Hasilnya `worldFromMap · relativePose · vertex`.
-2. Mesh yang sudah lurus dipakai sebagai **depth-only occluder** (`colorWrite:false,
-   depthWrite:true`), dipasang saat anak mesh benar-benar muncul di scene dan dibatasi ke
-   anak `meshGroup` saja — memperbaiki dua cacat yang mencabut occlusion di ADR-W006.
-3. **Horizon visibilitas**: jejak dipotong pada `HORIZON_M` sepanjang lintasan, pilar tujuan
-   digerbangi `PILAR_M`. Ini **bukan** occlusion melainkan keterbacaan navigasi — dicatat
-   eksplisit supaya tak dikutip kelak sebagai "occlusion sudah beres".
+2. **Horizon visibilitas**: jejak dipotong pada `HORIZON_M` (default 8 m, `?horizon=`)
+   sepanjang lintasan, pilar tujuan digerbangi `PILAR_M` (default 12 m, `?pilar=`). Ini
+   **bukan** occlusion melainkan keterbacaan navigasi — dicatat eksplisit supaya tak dikutip
+   kelak sebagai "occlusion sudah beres".
+3. ⏳ **Material depth-only occluder BELUM dipasang.** Ia menunggu gerbang lapangan: mesh
+   harus terbukti sejajar koridor di Lantai 1 **dan** Lantai 2 lewat `?mesh=true`. Occluder
+   yang posisinya salah mengklip objek di tempat keliru, dan karena `colorWrite:false`
+   penyebabnya tak terlihat sama sekali — itulah yang mencabut occlusion di ADR-W006.
 
 ### Konsekuensi
-- Mesh kembali diunduh di produksi (ongkos yang memang dituntut occlusion).
-- Occluder mewarisi kesalahan lokalisasi dan tak meng-occlude benda bergerak.
+- `showMesh` kini selalu aktif, jadi mesh diunduh di produksi juga. **Sampai material
+  occluder dipasang, mesh itu TERLIHAT di semua mode** — kondisi sementara yang disengaja.
+- Pengurutan `d.mapCodes` berdasarkan elevasi Y (ADR-W001) dilepas dari gerbang `SHOW_MESH`:
+  mesh kini dimuat di semua mode, dan `mapCodes[0]` yang tertukar berarti mesh lantai salah.
 - Depth ARCore ditolak untuk sekarang: dokumentasi resmi menyebut tembok putih polos
   menghasilkan depth tak presisi, SDK mengunci `requestSession` tanpa passthrough, dan
   dukungan perangkat belum diuji. Tetap dicatat untuk occlusion jarak dekat.
-- **Mesh kini sah jadi alat ukur akurasi** — pertama kalinya bagi project ini.
+- **Mesh berpotensi jadi alat ukur akurasi yang sah** — pertama kalinya bagi project ini —
+  begitu kesejajarannya terverifikasi di lapangan.
+- `adapter.world.getMeshGroup()` menembus field `private` SDK. Diterima sebagai utang
+  tercatat: tak ada accessor lain, `meshGroup` anonim di scene, versi SDK dikunci di
+  `package.json`. **Upgrade `@multisetai/vps` wajib memicu pengecekan ulang bagian ini.**
 
 ---
 ```
@@ -767,8 +786,14 @@ Ganti baris status pada entri occlusion:
 menjadi:
 
 ```markdown
-**Status:** ✅ SELESAI — dihidupkan kembali 2026-07-30 lewat ADR-W010, setelah `relativePose`
-terbukti (Uji 5) dan mesh dikoreksi.
+**Status:** ⏳ SEBAGIAN — penyebabnya sudah diperbaiki, occluder-nya belum dipasang.
+
+Koreksi `relativePose` sudah mendarat (ADR-W010): mesh Lantai 2 tak lagi meleset 3.99 m +
+yaw 20.89°. **Material depth-only occluder MENUNGGU gerbang lapangan** — mesh harus terbukti
+sejajar koridor di Lantai 1 dan Lantai 2 lewat `?mesh=true` sebelum dipasang.
+
+⚠️ **Kondisi sementara:** `showMesh` kini selalu aktif tapi materialnya belum diganti, jadi
+mesh gedung TERLIHAT di semua mode, termasuk produksi.
 ```
 
 - [ ] **Step 3: Perbarui `README.md` §Status**
@@ -782,8 +807,9 @@ Ganti baris:
 menjadi:
 
 ```markdown
-- [x] Mesh dikoreksi `relativePose` (yaw 20.89° Lt 2) + occluder depth-only (ADR-W010)
+- [x] Mesh dikoreksi `relativePose` — Lt 2 tak lagi meleset 3.99 m + yaw 20.89° (ADR-W010)
 - [x] Horizon visibilitas — jejak & pilar tak digambar di luar jangkauan wajar
+- [ ] Occluder depth-only — menunggu bukti mesh sejajar di Lt 1 & Lt 2 (`?mesh=true`)
 ```
 
 - [ ] **Step 4: Perbarui `docs/ARCHITECTURE.md` §6.4**
