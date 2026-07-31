@@ -45,11 +45,16 @@ Koreksi `relativePose` sudah mendarat (ADR-W010): mesh Lantai 2 tak lagi meleset
 yaw 20.89°. **Material depth-only occluder MENUNGGU gerbang lapangan** — mesh harus terbukti
 sejajar koridor di Lantai 1 dan Lantai 2 lewat `?mesh=true` sebelum dipasang.
 
-`showMesh` tetap digerbangi `?mesh=true`, jadi produksi tidak memuat mesh sama sekali. Sempat
-dibuat aktif tanpa syarat untuk menyiapkan occluder lalu dikembalikan: selama materialnya
-belum ada, produksi cuma menanggung ongkosnya (mesh ungu menutupi kamera + unduhan mesh &
-Draco) tanpa satu pun manfaatnya. Task occluder nanti mengaktifkannya **bersamaan** dengan
-memasang material — satu paket, tak boleh dipisah lagi.
+Mesh hanya dimuat saat `?mesh=true` **atau** `?admin=true`; URL produksi polos tidak
+mengunduhnya sama sekali. Di Mode Admin tersedia slider **🧱 Tampilkan Mesh Gedung** untuk
+menyalakan/mematikannya seketika — slider mengatur tampil/sembunyi saja, karena
+`ThreeAdapter` membaca `showMesh` sekali di constructor sehingga ketersediaan mesh tak bisa
+diubah di tengah sesi.
+
+`showMesh` sempat dibuat aktif tanpa syarat untuk menyiapkan occluder lalu dikembalikan:
+selama materialnya belum ada, produksi cuma menanggung ongkosnya (mesh ungu menutupi kamera +
+unduhan mesh & Draco) tanpa satu pun manfaatnya. Task occluder nanti mengaktifkannya
+**bersamaan** dengan memasang material — satu paket, tak boleh dipisah lagi.
 
 **Dampak:** Pilar penanda POI dan chevron lantai terlihat di balik tembok fisik (tidak
 ter-occlude oleh geometri dunia nyata).

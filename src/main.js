@@ -40,6 +40,20 @@ const floorOf = (mapY) => (mapY >= 1.5 ? 2 : 1);
 // "apakah materialnya dibiarkan terlihat".
 const SHOW_MESH = new URLSearchParams(location.search).has("mesh");
 
+// Mode Admin dibaca di level modul karena dipakai SEBELUM ThreeAdapter dibuat: `showMesh`
+// harus sudah bernilai benar di constructor (lihat catatan di bawah).
+const IS_ADMIN = location.search.includes("admin=true") || location.search.includes("debug=true");
+
+// KEMAMPUAN mesh vs TAMPILAN mesh — dua hal berbeda, dan SDK memaksa pemisahan ini.
+// `ThreeAdapter` membuat objek `world`-nya SEKALI di constructor, dengan syarat
+// `showMesh || showGizmo !== false || showObjectMeshes`. Kalau saat itu semuanya mati,
+// `world` tak pernah ada dan mesh MUSTAHIL dimuat belakangan. Jadi slider di UI tidak bisa
+// mengubah apakah mesh diunduh — ia hanya mengubah apakah mesh terlihat.
+//   - Produksi (tanpa admin/mesh) : world tak dibuat, nol unduhan. Bersih.
+//   - Sesi admin                  : mesh diunduh supaya slider bisa instan menampilkan atau
+//                                   menyembunyikannya tanpa menunggu localize berikutnya.
+const MESH_TERSEDIA = SHOW_MESH || IS_ADMIN;
+
 // Horizon visibilitas (spec 2026-07-30). Angka bisa disetel di lapangan tanpa deploy ulang —
 // sejarah repo ini menunjukkan konstanta spasial selalu perlu disetel setelah dicoba
 // (EYE_HEIGHT baru ketahuan salah setelah pilar tenggelam ter-deploy).
@@ -710,6 +724,17 @@ async function main() {
   // pada GRUP induk, tak pernah menyentuh transform anak — jadi koreksi ini bertahan melewati
   // setiap re-localize.
   let meshTerpasang = 0;
+  const meshChildren = [];          // anak mesh yang sudah ditemukan — dipakai slider tampil/sembunyi
+  let meshTampil = SHOW_MESH;       // default: hanya menyala kalau dibuka dengan ?mesh=true
+
+  // Visibilitas diset di ANAK, bukan di grup: applyMeshTransform() milik SDK memaksa
+  // `meshGroup.visible = true` tiap localize, jadi menyembunyikan grup akan dibatalkan
+  // ~10 detik kemudian. SDK tak pernah menyentuh `visible` anak.
+  function setMeshTampil(v) {
+    meshTampil = v;
+    meshChildren.forEach((c) => { c.visible = v; });
+  }
+
   function patchMeshChildren() {
     if (meshTerpasang >= mapSetPoses.size) return;   // ≤ jumlah lantai; berhenti setelah lengkap
     for (const [id, pose] of mapSetPoses) {
@@ -720,6 +745,8 @@ async function main() {
       child.position.copy(pose.position);
       child.quaternion.copy(pose.quaternion);
       child.updateMatrixWorld(true);
+      child.visible = meshTampil;    // mesh bisa muncul kapan saja; ikuti keadaan slider saat itu
+      meshChildren.push(child);
       // Tampilkan di HUD: satu-satunya bukti bahwa koreksi BENAR-BENAR terpasang. Versi
       // sebelumnya gagal diam-diam dan lolos build, cek otomatis, dan review implementer.
       state.auth = `OK (relativePose: ${mapSetPoses.size} map, ${meshTerpasang} terpasang)`;
@@ -729,12 +756,11 @@ async function main() {
 
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
-    // Mesh HANYA di ?mesh=true. Sempat dibuat `true` tanpa syarat untuk menyiapkan occluder,
-    // padahal material depth-only-nya belum dipasang — jadi produksi menanggung seluruh
-    // ongkosnya (mesh ungu menutupi kamera + unduhan mesh & Draco) tanpa satu pun manfaatnya.
-    // Task occluder nanti mengubah ini jadi `true` BERSAMAAN dengan memasang materialnya;
-    // dua perubahan itu satu paket dan tak boleh dipisah lagi.
-    showMesh: SHOW_MESH,
+    // Dibaca SEKALI di constructor — lihat MESH_TERSEDIA di atas. Produksi: tak dibuat sama
+    // sekali. Sesi admin: dibuat agar slider "Tampilkan Mesh" bisa instan.
+    // Task occluder nanti membuatnya `true` tanpa syarat BERSAMAAN dengan memasang material
+    // depth-only; dua perubahan itu satu paket dan tak boleh dipisah lagi.
+    showMesh: MESH_TERSEDIA,
     showGizmo: false,         // default SDK true; gizmo bawaannya tak dipakai (kita punya gizmo sendiri)
     useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
@@ -841,7 +867,6 @@ async function main() {
   }
 
   const toggleDebugMode = document.getElementById("toggle-debug-mode");
-  const isAdminUrl = location.search.includes("admin=true") || location.search.includes("debug=true");
   const devButtonsGroup = [];
 
   // Alat developer masuk ke grid #admin-tools DI DALAM panel. Versi lama memasangnya sebagai
@@ -857,11 +882,21 @@ async function main() {
     return b;
   };
 
+  // Slider mesh hanya ditampilkan kalau mesh memang tersedia di sesi ini — kalau tidak, ia
+  // jadi sakelar bohong yang tak mengubah apa pun.
+  const meshRow = document.getElementById("mesh-row");
+  const toggleMesh = document.getElementById("toggle-mesh");
+  if (toggleMesh) {
+    toggleMesh.checked = meshTampil;
+    toggleMesh.onchange = () => setMeshTampil(toggleMesh.checked);
+  }
+
   function updateDebugVisibility() {
     const isDebug = toggleDebugMode ? toggleDebugMode.checked : false;
     allPoiMarkersGroup.visible = isDebug;
     navGraphLinesGroup.visible = isDebug;
     adminTools?.classList.toggle("hidden", !isDebug);
+    meshRow?.classList.toggle("hidden", !(isDebug && MESH_TERSEDIA));
   }
 
   // SET TUJUAN & TUJUAN (MAP) DIHAPUS: sisa eksperimen Milestone 3 yang menjawab "apakah
@@ -970,7 +1005,7 @@ async function main() {
 
   // Hubungkan event listener Slider Switch Mode Admin
   if (toggleDebugMode) {
-    toggleDebugMode.checked = isAdminUrl;
+    toggleDebugMode.checked = IS_ADMIN;
     toggleDebugMode.onchange = updateDebugVisibility;
     updateDebugVisibility();
   }

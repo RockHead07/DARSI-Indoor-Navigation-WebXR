@@ -41,10 +41,19 @@ Tanpa `?poiId=` → pilih tujuan dari dropdown di panel bawah.
 |---|---|
 | `?poiId=<id>` | Langsung navigasi ke POI itu (dipanggil dari WebView) |
 | `?admin=true` (atau `debug=true`) | Overlay semua POI + graph koridor + tombol developer |
-| `?mesh=true` | **Diagnostik.** Render mesh gedung VPS (sudah dikoreksi `relativePose`, ADR-W010) — satu-satunya cek akurasi yang kita punya. Produksi tidak memuat mesh sama sekali |
+| `?mesh=true` | **Diagnostik.** Mesh gedung VPS (sudah dikoreksi `relativePose`, ADR-W010) langsung tampil — satu-satunya cek akurasi yang kita punya |
 | `?horizon=<m>` | Panjang jejak chevron yang digambar (default 8 m) |
 | `?pilar=<m>` | Jarak pilar tujuan mulai tampak (default 12 m) |
 | `?mapset=true` | Diagnostik mandiri: baca `relativePose` tiap map. Jalan tanpa AR, bisa dibuka di laptop |
+
+**Slider 🧱 Tampilkan Mesh Gedung** muncul di Mode Admin untuk menyalakan/mematikan mesh
+seketika tanpa memuat ulang halaman — praktis untuk membandingkan "dengan mesh" vs "tanpa
+mesh" sambil berdiri di tempat yang sama.
+
+Catatan: slider hanya mengatur **tampil/sembunyi**, bukan apakah mesh diunduh. `ThreeAdapter`
+membaca `showMesh` sekali saat dibuat, jadi ketersediaan mesh ditentukan waktu halaman dimuat
+— aktif kalau `?mesh=true` **atau** `?admin=true`. URL produksi polos tidak mengunduh mesh
+sama sekali.
 
 ---
 
