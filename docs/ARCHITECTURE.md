@@ -97,6 +97,8 @@ DARSI-Indoor-Navigation-WebXR/
 │   ├── main.js             # Kode utama aplikasi (entry point spike WebXR)
 │   └── horizon.js          # clipPathToHorizon — fungsi murni, bisa diuji dari Node
 ├── tools/
+│   ├── check-horizon.mjs   # Cek clipPathToHorizon (node polos, tanpa framework)
+│   ├── check-navgraph.mjs  # Validasi navgraph.json: edge menggantung, self-loop, konektivitas
 │   └── verify-mapcodes.mjs # Script utilitas verifikasi mapCodes VPS
 ├── .env.example            # Contoh variabel lingkungan
 ├── .env.local              # Variabel lingkungan lokal (client credentials VPS)

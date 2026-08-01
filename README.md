@@ -85,7 +85,12 @@ sama sekali.
 - [x] Protokol scan (`docs/SCAN-PROTOCOL.md`)
 - [x] CI/CD (GitHub Actions + Vercel auto-deploy)
 - [~] Alur balik Chrome→Flutter (setengah jadi)
-- [ ] 🔬 **Uji 4:** kesejajaran mesh setelah warm-up ARCore (`?mesh=true`)
+- [x] Navgraph koridor Lt 2 direkam di lapangan — 9 node (Uji 6)
+- [x] Perekam navgraph: auto-save `localStorage`, preview di AR, validator (ADR-W012)
+- [x] Kontrol dirapikan: satu tombol AR + tujuan terpisah (ADR-W011)
+- [ ] ⛔ **Koordinat POI salah** — rekam ulang (prioritas 1, `docs/KNOWN-ISSUES.md`)
+- [ ] 🔬 Jejak membelok di tikungan — belum pernah diuji
+- [ ] 🔬 Ukur akurasi lokalisasi pakai mesh (kini penggaris sah)
 - [ ] ⛔ **Localize stabil < 1m di Lantai 1** (blocker — `docs/KNOWN-ISSUES.md`)
 - [ ] navgraph Lantai 1 + node tangga/lift (buka rute lintas-lantai)
 - [x] Mesh dikoreksi `relativePose` — Lt 2 tak lagi meleset 3.99 m + yaw 20.89° (ADR-W010)

@@ -203,3 +203,73 @@ setelah koreksi `relativePose` dipasang.
 Prasyarat ADR-W006 untuk menghidupkan occlusion (**"mesh terbukti sejajar"**) kini tinggal
 satu perubahan kode: transformasi mesh menjadi `worldFromMap · relativePose`. Lihat Tahap 2
 di `docs/superpowers/specs/2026-07-30-occlusion-design.md`.
+
+---
+
+## Uji 6: 2026-08-01 — RS Jemursari (Lt 2, rekam navgraph + verifikasi relativePose live)
+
+**Tujuan:** memverifikasi koreksi `relativePose` benar-benar terpasang di perangkat, dan
+merekam navgraph koridor pertama.
+
+### ✅ Koreksi `relativePose` TERPASANG di perangkat
+
+```
+auth : OK (relativePose: 2 map, 2 terpasang)
+```
+
+Penghitung `terpasang` dipasang khusus untuk menangkap kegagalan senyap — versi sebelumnya
+memanggil `adapter.world.getMeshGroup()` yang **tidak ada** (metode itu milik `MeshVisualizer`
+di dalam `World`), dan optional chaining menelannya jadi no-op tanpa error. Angka `2` juga
+mengonfirmasi asumsi yang sebelumnya belum pernah diuji: `_id` dari endpoint map-set **sama
+dengan** `_id` yang dipakai SDK untuk menamai objek mesh di scene.
+
+### ✅ Navgraph koridor pertama terekam — 9 node, 8 edge
+
+Terpasang di `public/data/navgraph.json`, menggantikan 3 node bikinan tangan.
+
+```
+jarak antar-node : 3.0–4.7 m (rata 4.1)
+rentang X        : 0.51 m      ← koridor LURUS, tanpa tikungan
+rentang Z        : 32.90 m
+cakupan Z        : 4.91 .. 37.81
+POIKU_1 → node terdekat : N_LT2_09, 1.77 m
+konektivitas     : 9/9, satu kesatuan
+```
+
+**Dampak nyata:** node terdekat kini paling jauh ~2,3 m dari mana pun di koridor itu, bukan
+belasan meter. Ini yang membuat rute berangkat **maju**, bukan menyuruh balik badan ke node
+yang tertinggal di belakang (lihat Uji 4).
+
+**Batas yang diakui:** rentang X 0,51 m sepanjang 32,9 m = graf garis lurus. Pemilik project
+mengonfirmasi ini disengaja — **tikungan belum diuji sama sekali**. Jadi kemampuan jejak
+untuk membelok masih belum terbukti di lapangan.
+
+### Bukti perekam bekerja sesuai rancangan
+
+Edge ketiga adalah `01→03`, bukan `02→03`. Itu jejak dari berjalan maju ke `01`, mundur ke
+`02`, lalu **kembali ke titik `01`** — snap 1,5 m mengenalinya sebagai node lama (tak membuat
+node kembar) dan dedup mencegah edge `02–01` tergambar dua kali.
+
+### ⛔ TEMUAN UTAMA: koordinat POI tersimpan SALAH
+
+Keluhan "POI makin awur-awuran, tidak pernah pas di lokasinya" ditelusuri, dan penyebabnya
+**bukan** render maupun lokalisasi — melainkan **datanya**:
+
+```
+POIKU_1 direkam        : 2026-07-27  (commit 3ff264a)
+Bug REKAM POI diperbaiki: 2026-07-29  (commit de4405e)
+```
+
+POI itu direkam **dua hari sebelum** perbaikan, memakai `lastMapPos` — posisi dari lokalisasi
+terakhir, yang bisa **sampai 10 detik basi**. Direkam sambil berjalan, koordinat tersimpannya
+meleset beberapa meter. Perbaikan tidak mengoreksi data yang sudah terlanjur direkam.
+
+**Konsekuensi:** rangka rutenya kini benar, tapi ujung tujuannya masih salah. Jejak akan
+memandu dengan rapi ke titik yang keliru. **POI wajib direkam ulang.**
+
+### Belum diuji
+
+- Tikungan — kemampuan jejak membelok belum pernah dibuktikan.
+- Akurasi lokalisasi terhadap dunia nyata (mesh kini penggaris sah, belum dipakai mengukur).
+- Slider mesh: dilaporkan tak bereaksi, tapi sesi itu kemungkinan tanpa `?mesh`/`?admin` di
+  URL sehingga mesh memang tak dimuat. Perlu diuji ulang dengan URL yang benar.

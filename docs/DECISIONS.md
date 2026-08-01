@@ -388,6 +388,101 @@ murni**. Di ujung koridor 30 m, yaw saja → meleset 11.4 m.
 
 ---
 
+## ADR-W011 — Kontrol dipisah dua urusan; admin MELIHAT & MEREKAM, mengedit tetap lewat git (2026-08-01)
+
+### Konteks
+UI sempat berisi 8 tombol melayang `position:fixed` bertumpuk di 24/80/…/416 px — dua
+terbawah menimpa panel navigasi. Pemilik project melaporkan bingung dengan tujuan tiap
+tombol. Ditemukan juga bahwa **AR hanya bisa dinyalakan lewat tombol "Navigasi"**, sehingga
+menyalakan kamera MEWAJIBKAN memilih tujuan — padahal dua pekerjaan lapangan tersering
+(menilai kesejajaran mesh, merekam navgraph) justru butuh AR **tanpa** tujuan.
+
+Muncul juga usulan membangun UI dua-lapis (User/Admin) di mana admin bisa **mengedit dan
+mengkalibrasi** navigasi.
+
+### Keputusan
+1. **Dua urusan, dua kontrol.** `#btn-ar` mengurus kamera AR saja (`MULAI AR` ↔ `HENTIKAN AR`,
+   warna berubah); `#poi-select` mengurus tujuan dan bisa diganti kapan saja tanpa mematikan
+   AR. Opsi kosong = berhenti menavigasi tapi tetap di dalam sesi.
+2. **Alat developer masuk grid di DALAM panel**, hanya tampil saat Mode Admin. Tak ada lagi
+   tombol melayang.
+3. **`SELESAI ✓` bukan alat admin** — ia satu-satunya jalan kembali ke MyRSIy lewat deep link,
+   jadi tetap di panel di semua mode.
+4. **Admin layer boleh MELIHAT, MENDIAGNOSIS, dan MEREKAM. Mengedit data navigasi tetap
+   lewat git** (EXPORT → tempel → commit → deploy). Editor live yang menulis ke backend
+   DITOLAK untuk sekarang.
+5. **UI produk yang dipoles dikerjakan di repo WebView (Next.js), bukan di sini** — sesuai
+   piagam `CLAUDE.md`: *"Lab spike, BUKAN produk … jangan kembangkan repo ini jadi app sendiri."*
+
+### Alasan
+- **Keputusan 3 memperbaiki bug produksi:** `SELESAI ✓` dibuat lewat `mkBtn` sehingga hanya
+  muncul saat Mode Admin. Artinya pengguna produksi masuk AR dan **tidak punya cara keluar**.
+- **Keputusan 4 — kenapa git lebih tepat daripada editor live.** `?admin=true` adalah query
+  param, bukan autentikasi. Selama tak ada jalur tulis, itu aman. Begitu admin bisa menyimpan
+  perubahan, siapa pun yang mengetik `?admin=true` bisa menulis ulang graf navigasi rumah
+  sakit — itu batas keamanan sungguhan yang butuh RLS + role, bukan query param.
+  Dan untuk data yang dipakai orang mencari **IGD**, alur lewat git memberi riwayat, review
+  sebelum masuk, dan rollback satu perintah. Editor live memberi kecepatan — plus cara
+  merusak navigasi untuk semua orang tanpa satu pun review. Graf navigasi berubah setahun
+  sekali saat renovasi; kecepatan bukan yang dibutuhkan.
+- Sejalan preseden ADR-010/ADR-013 di repo Unity: jalan mudah ditolak demi yang benar saat
+  menyangkut keamanan/privasi.
+
+### Konsekuensi
+- Dihapus: `SET TUJUAN` dan `TUJUAN (MAP)` beserta `destMap`/`anchorDest` yang jadi mati —
+  sisa eksperimen Milestone 3 yang pertanyaannya sudah digantikan navigasi POI + A*.
+- Terukur di 375×812: 11 kontrol, **nol tumpang tindih**, panel muat penuh di layar.
+- Label `#btn-ar` diturunkan dari `onSessionStart`/`onSessionEnd`, bukan ditebak saat diklik —
+  sesi bisa berakhir sendiri (tombol back, focus loss) dan tombol harus ikut jujur.
+- Slider **🧱 Tampilkan Mesh Gedung** hanya mengatur tampil/sembunyi, bukan apakah mesh
+  diunduh: `ThreeAdapter` membaca `showMesh` sekali di constructor. Ketersediaan ditentukan
+  saat halaman dimuat (`?mesh=true` atau `?admin=true`); URL produksi polos = nol unduhan.
+  Kalau tak tersedia, slider tampil **mati beserta alasannya**, tidak menghilang diam-diam.
+- Visibilitas mesh ditegakkan **tiap frame**, bukan sekali saat ditemukan, agar slider selalu
+  jadi otoritas terakhir.
+
+---
+
+## ADR-W012 — Rekaman navgraph persisten & alat lapangan (2026-08-01)
+
+### Konteks
+Perekam navgraph awalnya hanya hidup di memori halaman: satu reload, atau tab yang dibuang
+Chrome di latar belakang, menghapus seluruh hasil jalan kaki. Perekam juga **buta** —
+overlay hanya menggambar `navgraph.json` yang sudah ter-deploy, bukan yang sedang direkam,
+sehingga tikungan baru ketahuan tertangkap atau tidak setelah pulang.
+
+### Keputusan
+1. **Auto-save ke `localStorage`** tiap `REKAM NODE` dan `PUTUS RANTAI`, di-key per mapset
+   (`darsi.navgraph.<MAPSET>`). `lastId` ikut disimpan.
+2. **Graf yang sedang direkam ikut digambar di AR** (mint, node lebih besar) berdampingan
+   dengan yang terpasang (kuning).
+3. **`REKAM POI` mengisi `id`/`name` otomatis** dari POI yang dipilih di dropdown, dan
+   menampilkan **selisih dari koordinat tersimpan**.
+4. **`HAPUS REKAMAN`** dengan konfirmasi dua-tap, **tanpa `confirm()`**.
+
+### Alasan
+- `lastId` wajib ikut disimpan: tanpa itu rantai putus diam-diam setelah reload dan tap
+  berikutnya tak menyambung — bug yang baru ketahuan setelah berjalan jauh.
+- Saat rekaman dipulihkan, HUD menyebut **node mana** yang akan disambung. Kalau senyap,
+  pengguna bisa mengira mulai dari nol padahal menyambung, lalu menarik edge ke node lama
+  yang bisa ada di sayap gedung sebelah.
+- **`confirm()` dilarang**: dialog native saat sesi WebXR aktif memicu focus loss dan Chrome
+  mematikan sesi AR (ADR-W005).
+- Kegagalan simpan (mode privat/kuota) **tidak mematikan perekaman**, hanya ditandai di HUD —
+  kehilangan data senyap jauh lebih buruk daripada tak bisa menyimpan.
+- Selisih koordinat pada `REKAM POI` mengubah "rasanya kurang pas" jadi **angka**, yang
+  membuktikan data lama memang meleset (lihat Uji 6).
+
+### Konsekuensi
+- `tools/check-navgraph.mjs` ditambahkan: isi `navgraph.json` kini ditempel manual dari HP,
+  dan edge menggantung atau komponen terputus **tak terlihat saat membaca file** — gejalanya
+  cuma "kok rutenya lurus terus", karena A* diam-diam jatuh ke fallback garis lurus.
+- Baris HUD `intrinsics` diganti `POI terdekat: <nama> — <jarak> m`. Intrinsics adalah
+  hipotesis utama offset mesh selama berminggu-minggu; Uji 5 membuktikan penyebabnya
+  `relativePose`, dan nilainya konsisten wajar di tiap uji.
+
+---
+
 ## ADR dari repo Unity yang tetap berlaku
 
 - **ADR-020:** Lift memutus tracking $\rightarrow$ navigasi tersegmentasi. Di web: manfaatkan `relocalization` otomatis VPS + pantau perubahan `mapCodes` / `position.Y` untuk konfirmasi perpindahan lantai.

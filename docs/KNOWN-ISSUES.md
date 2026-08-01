@@ -2,6 +2,37 @@
 
 ---
 
+## ⛔ PRIORITAS 1: Koordinat POI Tersimpan SALAH
+
+**Status:** BELUM DIPERBAIKI — butuh rekam ulang di lapangan  
+**Dampak:** navigasi memandu dengan rapi ke **titik yang keliru**. Rangka rutenya benar,
+ujungnya salah.
+
+```
+POIKU_1 direkam         : 2026-07-27  (commit 3ff264a)
+Bug REKAM POI diperbaiki : 2026-07-29  (commit de4405e)
+```
+
+**Akar masalah:** POI direkam dua hari **sebelum** perbaikan, memakai `lastMapPos` — posisi
+dari lokalisasi terakhir yang bisa **sampai 10 detik basi**. Direkam sambil berjalan,
+koordinatnya meleset beberapa meter. Perbaikan tidak mengoreksi data yang sudah terlanjur
+direkam.
+
+**Ini bukan masalah render maupun lokalisasi.** Penempatan POI tetap
+`poiMapPos.applyMatrix4(worldFromMap)`, tak berubah. Datanya yang salah.
+
+**Cara memperbaiki:**
+1. Buka `?admin=true&mesh=true`, MULAI AR, tunggu localize.
+2. Pilih POI yang mau diperbaiki di dropdown (`id`/`name` terisi otomatis).
+3. Berdiri **tepat** di lokasi aslinya → **REKAM POI 📍**.
+4. Baca `selisih dari koordinat tersimpan` — itu besar kesalahan data lama.
+5. Tempel entri penggantinya ke `public/data/pois.json`, commit, deploy.
+
+HUD juga menampilkan `POI terdekat: <nama> — <jarak> m` terus-menerus; berdiri di lokasi
+asli dan membacanya memberi angka yang sama tanpa merekam.
+
+---
+
 ## ⛔ BLOCKER: Localize Map Jemursari Tidak Stabil (Lantai 1 & lintas-lantai)
 
 **Status:** BELUM TERSELESAIKAN — **ruang lingkup dipersempit 2026-07-29**  
@@ -151,6 +182,9 @@ Terkonfirmasi di iPhone 2026-07-22.
 
 | Keputusan | Status | Tergantung Pada |
 |---|---|---|
+| Koordinat POI benar | ⛔ Prioritas 1 | Rekam ulang di lapangan (lihat atas) |
+| Jejak membelok di tikungan | 🔬 Belum diuji | Rekam navgraph di koridor bertikungan |
+| UI dua-lapis User/Admin | ⏸ Ditunda | Data & tikungan beres dulu; dikerjakan di repo WebView (ADR-W011) |
 | Localize stabil (< 1m) Lt 1 | ⛔ Blocker | Re-scan map |
 | Kesejajaran mesh (akurasi) | ⏳ Diperbaiki, verifikasi lapangan tersisa | Penyebab ditemukan & diperbaiki (Uji 5 + koreksi `relativePose`, ADR-W010) → tersisa konfirmasi lapangan di Lt 1 & Lt 2 |
 | Occlusion | ⏸ Ditunda | Gerbang lapangan Lt 1 & Lt 2 (ADR-W010) |
