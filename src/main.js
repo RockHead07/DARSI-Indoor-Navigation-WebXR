@@ -736,21 +736,29 @@ async function main() {
   }
 
   function patchMeshChildren() {
-    if (meshTerpasang >= mapSetPoses.size) return;   // ≤ jumlah lantai; berhenti setelah lengkap
-    for (const [id, pose] of mapSetPoses) {
-      const child = scene.getObjectByName(id);
-      if (!child || child.userData.msPatched) continue;
-      child.userData.msPatched = true;
-      meshTerpasang++;
-      child.position.copy(pose.position);
-      child.quaternion.copy(pose.quaternion);
-      child.updateMatrixWorld(true);
-      child.visible = meshTampil;    // mesh bisa muncul kapan saja; ikuti keadaan slider saat itu
-      meshChildren.push(child);
-      // Tampilkan di HUD: satu-satunya bukti bahwa koreksi BENAR-BENAR terpasang. Versi
-      // sebelumnya gagal diam-diam dan lolos build, cek otomatis, dan review implementer.
-      state.auth = `OK (relativePose: ${mapSetPoses.size} map, ${meshTerpasang} terpasang)`;
-      draw();
+    // Koreksi relativePose: sekali per mesh, dilewati begitu semuanya terpasang.
+    if (meshTerpasang < mapSetPoses.size) {
+      for (const [id, pose] of mapSetPoses) {
+        const child = scene.getObjectByName(id);
+        if (!child || child.userData.msPatched) continue;
+        child.userData.msPatched = true;
+        meshTerpasang++;
+        child.position.copy(pose.position);
+        child.quaternion.copy(pose.quaternion);
+        child.updateMatrixWorld(true);
+        meshChildren.push(child);
+        // Tampilkan di HUD: satu-satunya bukti bahwa koreksi BENAR-BENAR terpasang. Versi
+        // sebelumnya gagal diam-diam dan lolos build, cek otomatis, dan review implementer.
+        state.auth = `OK (relativePose: ${mapSetPoses.size} map, ${meshTerpasang} terpasang)`;
+        draw();
+      }
+    }
+    // Visibilitas DITEGAKKAN tiap frame, bukan dipasang sekali saat mesh ditemukan. Slider
+    // harus jadi otoritas terakhir: kalau ada apa pun yang menampilkan mesh kembali —
+    // SDK, animasi reveal, atau jalur yang belum kita ketahui — ia dikoreksi di frame
+    // berikutnya alih-alih menang diam-diam. Ongkosnya perbandingan boolean per lantai.
+    for (const c of meshChildren) {
+      if (c.visible !== meshTampil) c.visible = meshTampil;
     }
   }
 
