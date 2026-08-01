@@ -597,39 +597,38 @@ async function main() {
     });
   }
 
+  // Gambar satu graf ke navGraphLinesGroup. Dipakai dua kali: graf TERPASANG (navgraph.json,
+  // kuning) dan graf yang SEDANG DIREKAM (mint). Tanpa yang kedua kamu merekam buta —
+  // tikungan baru ketahuan tertangkap atau tidak setelah pulang dan menempelkannya.
+  function gambarGraf(g, worldFromMap, warnaNode, warnaGaris, radius) {
+    if (!g?.nodes?.length) return;
+    const posisi = new Map();
+    for (const n of g.nodes) {
+      const w = new THREE.Vector3(n.position.x, n.position.y, n.position.z).applyMatrix4(worldFromMap);
+      posisi.set(n.id, w);
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 10, 10),
+        new THREE.MeshBasicMaterial({ color: warnaNode })
+      );
+      dot.position.copy(w);
+      navGraphLinesGroup.add(dot);
+    }
+    for (const e of g.edges ?? []) {
+      const p1 = posisi.get(e.from), p2 = posisi.get(e.to);
+      if (!p1 || !p2) continue;
+      navGraphLinesGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([p1, p2]),
+        new THREE.LineBasicMaterial({ color: warnaGaris, linewidth: 2 })
+      ));
+    }
+  }
+
   function renderNavGraphOverlay(worldFromMap) {
     while (navGraphLinesGroup.children.length > 0) {
       navGraphLinesGroup.remove(navGraphLinesGroup.children[0]);
     }
-    if (!navGraph || !navGraph.nodes || !navGraph.edges) return;
-
-    const nodeWorldPositions = new Map();
-    navGraph.nodes.forEach((n) => {
-      const wPos = new THREE.Vector3(n.position.x, n.position.y, n.position.z).applyMatrix4(worldFromMap);
-      nodeWorldPositions.set(n.id, wPos);
-
-      // Titik node persimpangan (Kuning emas 3D sphere)
-      const dot = new THREE.Mesh(
-        new THREE.SphereGeometry(0.07, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0xfacc15 })
-      );
-      dot.position.copy(wPos);
-      navGraphLinesGroup.add(dot);
-    });
-
-    // Garis koridor penghubung (Kuning cerah)
-    navGraph.edges.forEach((e) => {
-      const p1 = nodeWorldPositions.get(e.from);
-      const p2 = nodeWorldPositions.get(e.to);
-      if (p1 && p2) {
-        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-        const line = new THREE.Line(
-          geometry,
-          new THREE.LineBasicMaterial({ color: 0xfde047, linewidth: 2 })
-        );
-        navGraphLinesGroup.add(line);
-      }
-    });
+    gambarGraf(navGraph, worldFromMap, 0xfacc15, 0xfde047, 0.07);        // terpasang — kuning
+    gambarGraf(rec, worldFromMap, 0x34d399, 0x34d399, 0.10);             // sedang direkam — mint, lebih besar
   }
 
   function updateFloorTrail(worldFromMap, userWorldPos) {
@@ -955,10 +954,14 @@ async function main() {
       state.nav = "Belum ada localize — arahkan kamera ke sekeliling dulu.";
       draw(); return;
     }
+    // Kalau ada POI dipilih di dropdown, id & name-nya diisi otomatis → hasilnya entri
+    // PENGGANTI yang siap tempel. Versi lama mencetak id/name kosong dan menyuruh mengetik
+    // di HP, padahal pekerjaan yang sebenarnya adalah MEREKAM ULANG POI yang sudah ada.
+    const target = allPois.find((p) => p.id === poiSelect?.value) ?? null;
     const mapCode = [...state.seen][0] ?? "MAP_???";
     const snippet = JSON.stringify({
-      id: "",
-      name: "",
+      id: target?.id ?? "",
+      name: target?.name ?? "",
       floor: floorOf(here.y),
       mapCode,
       position: {
@@ -967,7 +970,16 @@ async function main() {
         z: parseFloat(here.z.toFixed(2)),
       },
     }, null, 2);
-    state.nav = `📍 REKAM POI (copy ke pois.json):\n${snippet}`;
+
+    // Selisih dari koordinat lama = seberapa jauh data tersimpan meleset. Inilah angka yang
+    // membuktikan POI perlu direkam ulang, bukan sekadar "rasanya kurang pas".
+    let selisih = "";
+    if (target) {
+      const d = dist3(target.position, here);
+      selisih = `\nselisih dari koordinat tersimpan: ${d.toFixed(2)} m`;
+    }
+    state.nav = `📍 REKAM POI${target ? ` — pengganti untuk ${target.name}` : " (pilih POI di dropdown untuk isi id/name otomatis)"}` +
+                `${selisih}\n${snippet}`;
     draw();
   });
 
