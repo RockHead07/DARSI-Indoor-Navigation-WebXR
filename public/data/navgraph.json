@@ -1,27 +1,24 @@
 {
-  "_catatan": "distance TIDAK disimpan di sini — diturunkan dari posisi node saat loadNavGraph (ADR-021: satu pemilik data). Rekam node lewat tombol REKAM NODE di Mode Admin, lalu EXPORT NAVGRAPH.",
+  "_catatan": "Direkam di lapangan 2026-08-01 (RS Jemursari Lt 2) lewat tombol REKAM NODE di Mode Admin. distance TIDAK disimpan — diturunkan dari posisi node saat loadNavGraph (ADR-021). Validasi: node tools/check-navgraph.mjs",
   "nodes": [
-    {
-      "id": "NODE_LT2_START",
-      "name": "Koridor Utama Lantai 2",
-      "floor": 2,
-      "position": { "x": -2.0, "y": 3.7, "z": 34.3 }
-    },
-    {
-      "id": "NODE_LT2_MID",
-      "name": "Persimpangan Koridor Lantai 2",
-      "floor": 2,
-      "position": { "x": -1.8, "y": 3.8, "z": 37.0 }
-    },
-    {
-      "id": "POIKU_1",
-      "name": "Poliklinik Azzara 201",
-      "floor": 2,
-      "position": { "x": -1.56, "y": 3.81, "z": 39.58 }
-    }
+    { "id": "N_LT2_01", "name": "", "floor": 2, "position": { "x": -1.73, "y": 4.03, "z": 8.87 } },
+    { "id": "N_LT2_02", "name": "", "floor": 2, "position": { "x": -1.98, "y": 3.94, "z": 4.91 } },
+    { "id": "N_LT2_03", "name": "", "floor": 2, "position": { "x": -2.16, "y": 3.94, "z": 12.85 } },
+    { "id": "N_LT2_04", "name": "", "floor": 2, "position": { "x": -1.97, "y": 3.88, "z": 16.66 } },
+    { "id": "N_LT2_05", "name": "", "floor": 2, "position": { "x": -2.04, "y": 3.94, "z": 21.36 } },
+    { "id": "N_LT2_06", "name": "", "floor": 2, "position": { "x": -1.86, "y": 3.82, "z": 26 } },
+    { "id": "N_LT2_07", "name": "", "floor": 2, "position": { "x": -1.75, "y": 3.85, "z": 28.95 } },
+    { "id": "N_LT2_08", "name": "", "floor": 2, "position": { "x": -1.72, "y": 3.78, "z": 33.54 } },
+    { "id": "N_LT2_09", "name": "", "floor": 2, "position": { "x": -1.65, "y": 3.83, "z": 37.81 } }
   ],
   "edges": [
-    { "from": "NODE_LT2_START", "to": "NODE_LT2_MID" },
-    { "from": "NODE_LT2_MID", "to": "POIKU_1" }
+    { "from": "N_LT2_01", "to": "N_LT2_02" },
+    { "from": "N_LT2_01", "to": "N_LT2_03" },
+    { "from": "N_LT2_03", "to": "N_LT2_04" },
+    { "from": "N_LT2_04", "to": "N_LT2_05" },
+    { "from": "N_LT2_05", "to": "N_LT2_06" },
+    { "from": "N_LT2_06", "to": "N_LT2_07" },
+    { "from": "N_LT2_07", "to": "N_LT2_08" },
+    { "from": "N_LT2_08", "to": "N_LT2_09" }
   ]
 }
