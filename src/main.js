@@ -77,14 +77,15 @@ function returnToApp(params) {
 }
 
 const hud = document.getElementById("hud");
-const state = { auth: "—", session: "—", last: "—", seen: new Set(), nav: "tekan SET TUJUAN", drift: "—", pos: "—", intr: "—" };
+const state = { auth: "—", session: "—", last: "—", seen: new Set(),
+                nav: "pilih tujuan di dropdown, atau MULAI AR tanpa tujuan", drift: "—", pos: "—", poi: "—" };
 function draw() {
   hud.innerHTML =
     `<b>DARSI WebXR</b> — uji navigasi (${MAPSET})\n` +
     `auth    : ${state.auth}\n` +
     `sesi    : ${state.session}\n` +
     `localize: ${state.last}\n` +
-    `intrinsics: ${state.intr}   <b>← fx≈fy≈focal(px); px,py≈½w,½h?</b>\n` +
+    `POI terdekat: ${state.poi}   <b>← berdiri di lokasi asli; angka ini = error koordinat tersimpan</b>\n` +
     `pos(map): ${state.pos}   <b>← Y = kandidat sinyal lantai</b>\n` +
     `mapCodes : ${[...state.seen].join(" | ") || "—"}` +
     (state.seen.size > 1 ? `  <b>✓ §3</b>` : "") + `\n` +
@@ -294,13 +295,9 @@ async function main() {
       syncArButton(false);   // sesi bisa berakhir tanpa lewat tombol (back, focus loss) — label ikut jujur
       draw();
     },
-    // DIAGNOSTIK: intrinsics yang BENAR-BENAR dikirim ke VPS. App native pakai kalibrasi
-    // kamera asli; jalur web menurunkan dari proyeksi WebXR. Kalau fx≠fy jauh, atau px/py
-    // bukan ~½ width/height, atau fx tak masuk akal utk focal → itu sumber offset sistematis.
-    onCameraIntrinsics: (i) => {
-      state.intr = `fx=${i.fx?.toFixed(0)} fy=${i.fy?.toFixed(0)} px=${i.px?.toFixed(0)} py=${i.py?.toFixed(0)} ${i.width}x${i.height}`;
-      draw();
-    },
+    // Diagnostik intrinsics DIHAPUS: ia hipotesis utama offset mesh selama berminggu-minggu,
+    // dan Uji 5 membuktikan penyebabnya `relativePose`. Nilainya (fx=fy=898, px≈½w, py≈½h)
+    // konsisten wajar di tiap uji. Baris HUD-nya digantikan jarak POI terdekat.
     onLocalizationResult: (r) => {
       const d = r.localizeData;
       const p = d.position;
@@ -762,6 +759,29 @@ async function main() {
     }
   }
 
+  // Ubah "rasanya POI meleset" jadi ANGKA. Berdiri tepat di lokasi asli POI dan baca
+  // jaraknya: itulah error koordinat yang TERSIMPAN, bukan error lokalisasi.
+  // Dibutuhkan karena POI yang direkam sebelum 2026-07-29 memakai `lastMapPos` yang bisa
+  // 10 detik basi — koordinatnya memang salah dan tak bisa dibetulkan dari sisi render.
+  let poiTeksTerakhir = "";
+  function updatePoiTerdekat(user) {
+    if (!lastWorldFromMap || allPois.length === 0) return;
+    let dekat = null, jarak = Infinity;
+    for (const p of allPois) {
+      const w = new THREE.Vector3(p.position.x, p.position.y, p.position.z).applyMatrix4(lastWorldFromMap);
+      w.y = user.y;                       // jarak horizontal; beda lantai diurus label di bawah
+      const d = user.distanceTo(w);
+      if (d < jarak) { jarak = d; dekat = p; }
+    }
+    if (!dekat) return;
+    const beda = lastMapPos && floorOf(lastMapPos.y) !== (dekat.floor ?? floorOf(dekat.position.y));
+    const teks = `${dekat.name} — ${jarak.toFixed(1)} m${beda ? " (beda lantai)" : ""}`;
+    if (teks === poiTeksTerakhir) return;  // gambar ulang hanya saat berubah, bukan tiap frame
+    poiTeksTerakhir = teks;
+    state.poi = teks;
+    draw();
+  }
+
   const adapter = new ThreeAdapter({
     session, renderer, scene, camera,
     // Dibaca SEKALI di constructor — lihat MESH_TERSEDIA di atas. Produksi: tak dibuat sama
@@ -773,9 +793,12 @@ async function main() {
     useDefaultButton: false,  // Bersihkan UI: pakai tombol navigasi kustom, matikan tombol STOP AR bawaan SDK
     onXRFrame: () => {                            // dipanggil tiap frame, camera SUDAH ter-sync
       patchMeshChildren();   // mesh dimuat asinkron; tak ada callback "mesh siap" dari SDK
-      if (!destination) return;
+
       // WAJIB getWorldPosition — camera.position (lokal) BASI di WebXR, isinya ~origin sesi.
       const user = new THREE.Vector3(); camera.getWorldPosition(user);
+      updatePoiTerdekat(user);   // sebelum gerbang destination: berguna justru saat TANPA tujuan
+
+      if (!destination) return;
       const flat = destination.clone(); flat.y = user.y;   // jarak horizontal
       const dist = user.distanceTo(flat);
 
@@ -904,7 +927,18 @@ async function main() {
     allPoiMarkersGroup.visible = isDebug;
     navGraphLinesGroup.visible = isDebug;
     adminTools?.classList.toggle("hidden", !isDebug);
-    meshRow?.classList.toggle("hidden", !(isDebug && MESH_TERSEDIA));
+    // Ditampilkan walau mesh tak tersedia, tapi DIMATIKAN dengan alasannya. Versi sebelumnya
+    // menyembunyikannya diam-diam, jadi menyalakan Mode Admin di tengah sesi membuat slider
+    // tak pernah muncul tanpa penjelasan — padahal sebabnya cuma URL tanpa ?admin/?mesh saat
+    // halaman dimuat (ThreeAdapter membaca showMesh sekali di constructor).
+    meshRow?.classList.toggle("hidden", !isDebug);
+    if (meshRow && toggleMesh) {
+      toggleMesh.disabled = !MESH_TERSEDIA;
+      meshRow.style.opacity = MESH_TERSEDIA ? "1" : "0.5";
+      meshRow.querySelector("span").textContent = MESH_TERSEDIA
+        ? "🧱 Tampilkan Mesh Gedung"
+        : "🧱 Mesh tak dimuat — buka ulang dengan ?mesh=true";
+    }
   }
 
   // SET TUJUAN & TUJUAN (MAP) DIHAPUS: sisa eksperimen Milestone 3 yang menjawab "apakah
