@@ -941,11 +941,45 @@ async function main() {
   // Tiap tap menyimpan posisi map saat ini sebagai node DAN menyambungkannya ke node
   // sebelumnya. Jadi urutan langkahmu menyusuri koridor langsung menjadi topologi graf;
   // tikungan direkam dengan berhenti dan menekan tombol di setiap belokan.
-  const rec = { nodes: [], edges: [] };
+  const rec = { nodes: [], edges: [], lastId: null };
 
   // Sambungkan ke node terdekat yang SUDAH ada (untuk menutup persimpangan/loop) alih-alih
   // membuat node baru, kalau kita berdiri hampir di tempat yang sama.
   const SNAP_M = 1.5;
+
+  // --- Auto-save: rekaman bertahan melewati reload & bisa disambung lintas sesi ---
+  // Tanpa ini, satu reload atau tab yang dibuang Chrome di latar belakang menghapus seluruh
+  // hasil jalan kaki. Di-key per mapset supaya rekaman gedung lain tak tercampur.
+  const REC_KEY = `darsi.navgraph.${MAPSET}`;
+  let simpanPernahGagal = false;
+
+  function simpanRec() {
+    try {
+      localStorage.setItem(REC_KEY, JSON.stringify(rec));
+    } catch (e) {
+      // Kuota penuh / mode privat. Perekaman JANGAN ikut mati — cukup peringatkan sekali,
+      // karena kehilangan data senyap jauh lebih buruk daripada tak bisa menyimpan.
+      if (!simpanPernahGagal) {
+        simpanPernahGagal = true;
+        console.warn("auto-save navgraph gagal:", e);
+      }
+    }
+  }
+
+  function muatRec() {
+    try {
+      const d = JSON.parse(localStorage.getItem(REC_KEY) ?? "null");
+      if (!Array.isArray(d?.nodes) || !Array.isArray(d?.edges)) return false;
+      rec.nodes = d.nodes;
+      rec.edges = d.edges;
+      rec.lastId = d.lastId ?? null;
+      return rec.nodes.length > 0;
+    } catch {
+      return false;   // isi rusak → mulai dari kosong, jangan bikin halaman gagal muat
+    }
+  }
+
+  const recDipulihkan = muatRec();
 
   mkBtn("REKAM NODE ⛓️", "#14b8a6", () => {
     const here = currentMapPos();   // posisi LIVE, bukan lastMapPos yang basi ~10 dtk
@@ -970,17 +1004,38 @@ async function main() {
       rec.edges.push({ from: prev, to: node.id });
     }
     rec.lastId = node.id;
+    simpanRec();
 
     state.nav = `⛓️ ${node.id}${near ? " (nyambung ke node lama)" : ""}\n` +
-                `total: ${rec.nodes.length} node, ${rec.edges.length} edge\n` +
+                `total: ${rec.nodes.length} node, ${rec.edges.length} edge` +
+                (simpanPernahGagal ? "  ⚠️ AUTO-SAVE GAGAL — export sebelum tutup!" : "  ✓ tersimpan") + `\n` +
                 `Lanjut jalan & tap tiap tikungan. Tekan PUTUS RANTAI untuk mulai cabang baru.`;
     draw();
   });
 
   mkBtn("PUTUS RANTAI ✂️", "#64748b", () => {
     rec.lastId = null;   // tap berikutnya memulai cabang baru, tak menyambung ke node terakhir
+    simpanRec();
     state.nav = `✂️ rantai diputus — tap berikutnya jadi awal cabang baru.\n` +
                 `total: ${rec.nodes.length} node, ${rec.edges.length} edge`;
+    draw();
+  });
+
+  // Tanpa tombol ini rekaman jadi permanen dan tak bisa mulai bersih.
+  // SENGAJA TIDAK memakai confirm(): dialog native saat sesi WebXR aktif memicu focus loss
+  // dan Chrome mematikan sesinya (ADR-W005). Konfirmasinya dua-tap di tombol itu sendiri.
+  let hapusDiarmir = 0;
+  mkBtn("HAPUS REKAMAN 🗑️", "#7c3aed", () => {
+    if (Date.now() - hapusDiarmir > 4000) {
+      hapusDiarmir = Date.now();
+      state.nav = `⚠️ Tap HAPUS REKAMAN sekali lagi dalam 4 detik untuk menghapus ` +
+                  `${rec.nodes.length} node & ${rec.edges.length} edge.`;
+      draw(); return;
+    }
+    hapusDiarmir = 0;
+    rec.nodes = []; rec.edges = []; rec.lastId = null;
+    simpanRec();
+    state.nav = "🗑️ Rekaman navgraph dihapus. Mulai dari nol.";
     draw();
   });
 
@@ -1009,6 +1064,15 @@ async function main() {
       if (adapter.isActive()) adapter.stopSession();
       returnToApp({ arrived: String(arrived) });
     };
+  }
+
+  // Beri tahu kalau rekaman lama dipulihkan. Kalau senyap, kamu bisa mengira sedang mulai
+  // dari nol padahal sedang menyambung — lalu tap pertama menarik edge dari node lama yang
+  // jaraknya bisa di gedung sebelah.
+  if (recDipulihkan) {
+    state.nav = `♻️ Rekaman navgraph dipulihkan: ${rec.nodes.length} node, ${rec.edges.length} edge.\n` +
+                (rec.lastId ? `Tap berikutnya menyambung ke ${rec.lastId} — tekan PUTUS RANTAI dulu kalau kamu di area lain.\n` : "") +
+                `Tekan HAPUS REKAMAN kalau mau mulai bersih.`;
   }
 
   // Hubungkan event listener Slider Switch Mode Admin
